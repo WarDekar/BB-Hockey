@@ -1,0 +1,36 @@
+@import "tailwindcss";
+
+/*
+ * BB-Hockey palette — the fleet's Blue+Orange identity on the BB-King blue-grey
+ * chrome (same remap as BB-Football/index.css so the family reads as one):
+ *   chrome  #1e2230 · surface #282c3a · border #3a3f50 / #4a4f60 hover
+ *   accent  #7b9cf5 (BB blue) · orange #fb923c (separator) · ice #7dd3fc (the name)
+ */
+@theme {
+  --color-slate-950: #16181f;
+  --color-slate-900: #282c3a;
+  --color-slate-800: #3a3f50;
+  --color-slate-700: #4a4f60;
+  --color-slate-600: #6b7280;
+  --color-slate-500: #9ca3af;
+  --color-slate-400: #b3b9c4;
+  --color-slate-300: #cbd0d9;
+  --color-slate-200: #dbdfe6;
+  --color-slate-100: #e5e7eb;
+  --color-accent: #7b9cf5;
+  --color-brand-orange: #fb923c;
+  --color-ice: #7dd3fc;
+}
+
+:root { color-scheme: dark; font-size: 16px; }
+
+body {
+  margin: 0;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  background-color: #1e2230;
+  color: #e5e7eb;
+}
+
+.scrollbar-thin::-webkit-scrollbar { width: 6px; height: 6px; }
+.scrollbar-thin::-webkit-scrollbar-thumb { background: #3a3f50; border-radius: 3px; }
+input[type="number"] { appearance: textfield; -moz-appearance: textfield; }

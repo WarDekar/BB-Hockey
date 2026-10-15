@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "bb-hockey"
+version = "0.1.0"
+description = "BB-Hockey: NHL derivative pricer off the BB-Odds devigged consensus. Paper-only, research-first."
+requires-python = ">=3.12"
+license = { text = "Proprietary" }
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["bb_hockey*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
