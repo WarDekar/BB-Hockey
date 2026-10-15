@@ -38,7 +38,8 @@ def parse_competition(comp: dict) -> Optional[dict]:
     sides = {}
     for c in comp.get("competitors") or []:
         team = c.get("team") or {}
-        lines = [_int(ls.get("value") if isinstance(ls, dict) else ls) for ls in (c.get("linescores") or [])]
+        lines = [_int((ls.get("value") if ls.get("value") is not None else ls.get("displayValue")) if isinstance(ls, dict) else ls)
+                 for ls in (c.get("linescores") or [])]
         sides[c.get("homeAway")] = {
             "abbr": team.get("abbreviation"), "name": team.get("displayName"),
             "score": _int(c.get("score")), "lines": lines, "winner": c.get("winner"),
