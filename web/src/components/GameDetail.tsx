@@ -33,6 +33,7 @@ export default function GameDetail({ detail, reload, minEdge }: { detail: Detail
 
   const s = snapshot?.summary, i = snapshot?.inputs;
   const rowsFor = (market: string): BoardRow[] => (snapshot?.board ?? []).filter((r) => r.market === market);
+  const baseFor = (r: BoardRow): number | null => (snapshot?.board_base ?? []).find((b) => b.market === r.market && b.side === r.side && b.point === r.point)?.prob ?? null;
 
   return (
     <div className="space-y-3">
@@ -85,14 +86,15 @@ export default function GameDetail({ detail, reload, minEdge }: { detail: Detail
                     <span className="text-[10px] text-slate-600">{booksPerMarket.get(market) ? `${booksPerMarket.get(market)} quotes` : "no book quotes"}</span>
                   </div>
                   <table className="w-full text-xs">
-                    <thead><tr><Th>Side</Th><Th right>Fair</Th><Th right>Price</Th><Th right>Best book</Th><Th right>EV</Th><Th></Th></tr></thead>
+                    <thead><tr><Th>Side</Th><Th right>Base</Th><Th right>Fair</Th><Th right>Price</Th><Th right>Best book</Th><Th right>EV</Th><Th></Th></tr></thead>
                     <tbody>
                       {rows.map((r) => {
                         const b = best[`${r.market}|${r.side}|${r.point}`];
                         return (
                           <tr key={`${r.side}${r.point}`} className="border-t border-slate-800/60">
                             <Td className="text-slate-200">{sideLabel(r.side, r.point, ha, aa)}</Td>
-                            <Td right mono title={r.push ? `push ${pct(r.push)}` : undefined}>{pct(r.prob)}{r.push > 0.001 ? <span className="text-slate-600">·</span> : ""}</Td>
+                            <Td right mono className="text-slate-500" title="league-average benches, same ML and total">{baseFor(r) === null ? "—" : pct(baseFor(r))}</Td>
+                            <Td right mono className={baseFor(r) !== null && r.prob - (baseFor(r) as number) > 0.005 ? "text-ice" : baseFor(r) !== null && r.prob - (baseFor(r) as number) < -0.005 ? "text-amber-300" : ""} title={r.push ? `push ${pct(r.push)}` : undefined}>{pct(r.prob)}{r.push > 0.001 ? <span className="text-slate-600">·</span> : ""}</Td>
                             <Td right mono className="text-slate-300">{fmtAmerican(r.fair_price)}</Td>
                             <Td right mono className="text-slate-400" title={b ? `${b.sportsbook} · quoted ${ago(b.quoted_at)}` : undefined}>{b ? `${fmtAmerican(b.price)} ${b.sportsbook}` : "—"}</Td>
                             <Td right mono className={b ? evClass(b.ev) : "text-slate-600"}>{b ? signedPct(b.ev) : "—"}</Td>
