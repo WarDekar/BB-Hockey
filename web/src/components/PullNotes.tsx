@@ -1,3 +1,5 @@
+import { TeamLogo } from "./TeamLogo";
+const espnAbbr = (a: string) => ({ LAK: "LA", NJD: "NJ", SJS: "SJ", TBL: "TB" } as Record<string, string>)[a] ?? a;
 import { useMemo, useState } from "react";
 import type { CoachNote, NoteLean, NoteStat, PullNotes as Notes } from "../lib/api";
 import { useApi } from "../hooks";
@@ -69,7 +71,7 @@ export default function PullNotes() {
           {rows.map((c) => (
             <div key={c.coach} className="rounded-lg border border-slate-800 bg-slate-900 p-3">
               <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-                <span className="font-mono text-base font-semibold text-ice">{c.team}</span>
+                <span className="inline-flex items-center gap-1.5 font-mono text-base font-semibold text-ice"><TeamLogo abbr={espnAbbr(c.team)} size={22} />{c.team}</span>
                 <span className="font-medium text-slate-100">{c.coach}</span>
                 <span className="text-[11px] text-slate-500">since {c.since} · {c.games_with_team} g</span>
                 <span className="ml-auto flex gap-1">

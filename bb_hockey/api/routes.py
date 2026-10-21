@@ -15,9 +15,12 @@ from ..edges import best_per_side, evaluate_quotes
 from ..model.goals import MARKETS, ModelParams
 from ..model.odds_math import ev_per_unit, fair_price_no_push, kelly_fraction
 from ..pricer import baseline_from_snapshot, latest_snapshot, load_params, model_from_snapshot, save_params
-from ..teams import nhl_abbr
+from ..teams import TEAMS, nhl_abbr, resolve
 from ..worker import pbp_pass, pricing_pass, settlement_pass
 
+import logging
+
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
@@ -39,6 +42,33 @@ def health() -> dict:
             status = "degraded"
     return {"status": status, "version": __version__, "heartbeats": hb, "counts": counts,
             "paper": {"auto": settings.auto_paper, "min_edge": settings.min_edge, "kelly_fraction": settings.kelly_fraction}}
+
+
+_teams_cache: dict = {"at": None, "rows": None}
+
+
+@router.get("/teams")
+def teams() -> List[dict]:
+    """The 32 clubs with BB-Odds's ESPN identity (logo URL, colours) attached, keyed by our ESPN abbreviation.
+    Cached an hour in-process; a club BB-Odds cannot name still comes back, without a logo."""
+    now = datetime.now(timezone.utc)
+    if _teams_cache["rows"] is not None and (now - _teams_cache["at"]).total_seconds() < 3600:
+        return _teams_cache["rows"]
+    ident: dict = {}
+    try:
+        for r in odds_reader.espn_teams(odds_engine()):
+            t = resolve(r.get("display_name")) or resolve(r.get("abbreviation"))
+            if t:
+                ident[t.abbr] = r
+    except Exception as e:  # noqa: BLE001
+        logger.warning("BB-Odds team identity unavailable: %s", e)
+    rows = []
+    for t in TEAMS:
+        r = ident.get(t.abbr) or {}
+        rows.append({"abbr": t.abbr, "nhl_abbr": nhl_abbr(t.abbr), "city": t.city, "nickname": t.nickname, "name": f"{t.city} {t.nickname}",
+                     "logo_url": r.get("logo_url"), "color": r.get("color"), "alt_color": r.get("alternate_color")})
+    _teams_cache.update(at=now, rows=rows)
+    return rows
 
 
 @router.get("/slate")

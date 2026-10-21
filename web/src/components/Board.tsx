@@ -1,5 +1,7 @@
 import type { Bench, BenchLean, SlateRow } from "../lib/api";
-import { ago, fmtAmerican, fmtClock, matchup, money, num, pct } from "../lib/format";
+import { ago, fmtAmerican, fmtClock, money, num, pct } from "../lib/format";
+import { TeamLogo } from "./TeamLogo";
+import { Matchup } from "./TeamMark";
 import { Empty, Panel, Pill, Td, Th } from "./Primitives";
 
 const mmss = (s: number | null | undefined) => { if (s === null || s === undefined || !isFinite(s)) return "—"; const t = Math.round(s); return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, "0")}`; };
@@ -20,7 +22,7 @@ function BenchRead({ b, team, opp }: { b: Bench | null; team: string; opp: strin
     b.tags.length ? b.tags.join(" · ") : ""].filter(Boolean).join("\n");
   return (
     <span className="whitespace-nowrap" title={title}>
-      <span className="text-slate-400">{team} {b.coach.split(" ").slice(1).join(" ")}:</span>{" "}
+      <span className="text-slate-400"><TeamLogo abbr={team} size={14} className="mr-1" />{team} {b.coach.split(" ").slice(1).join(" ")}:</span>{" "}
       {items.length ? items.map((it, i) => <span key={i} className={it.cls}>{i ? " · " : ""}{it.text}</span>) : <span className="text-slate-600">no lean{d1 && d1.n < 12 ? " (thin)" : ""}</span>}
     </span>
   );
@@ -68,7 +70,7 @@ export default function Board({ rows, onOpen }: { rows: SlateRow[]; onOpen: (id:
                   return (
                     <tr key={g.id} onClick={() => onOpen(g.id)} className="cursor-pointer border-t border-slate-800/70 hover:bg-slate-800/40">
                       <Td mono className="text-slate-400">{fmtClock(g.game_time)}</Td>
-                      <Td className="font-medium text-slate-100" title={`${g.away_name} at ${g.home_name} · rot ${g.away_rotation ?? "?"}/${g.home_rotation ?? "?"}`}>{matchup(g)}</Td>
+                      <Td className="font-medium text-slate-100"><Matchup g={g} rotations /></Td>
                       <Td>{score ? <span className="font-mono text-slate-200">{score}</span> : <Pill tone={g.status === "live" ? "amber" : g.status === "pregame" ? "slate" : "blue"}>{g.status}</Pill>}</Td>
                       <Td right mono title={i ? `consensus home ${pct(i.p_home)} · ${i.consensus_at ?? ""}` : undefined}>{i ? `${fmtAmerican(probToAmerican(i.p_home))} / ${fmtAmerican(probToAmerican(1 - i.p_home))}` : "—"}</Td>
                       <Td right mono title={i ? `over ${pct(i.p_over)}${i.total_assumed ? " (assumed)" : ""}` : undefined}>{i ? `${i.total_point}${i.total_assumed ? "*" : ""}` : "—"}</Td>

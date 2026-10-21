@@ -87,6 +87,19 @@ The three filter bars persist to `localStorage`; an empty books list
 ("None") is never restored (it comes back as all books), because a saved
 empty selection showed "0 of 3,668" with a misleading min-EV message.
 
+## Display rules (fleet, from BB-Odds's frontend CLAUDE.md; 2026-10-21)
+
+Teams always render with logos (`TeamLogo`: slate-300 circular backing,
+inset padding, hides itself on a dead link, never inlined), books with
+`BookBadge` (file in `web/src/assets/books/` by slug, else a brand
+monogram), structured tooltips with `HoverTip` (portal card, never a native
+`title`), rotation numbers mono-gray beside the teams on the Board. Team
+identity comes from BB-Odds (`current.espn_teams` via
+`odds_reader.espn_teams`, served by `GET /teams`, cached an hour) and is
+resolved at read time in `web/src/lib/teams.ts`, never stored. `Matchup`,
+`TeamTag` and `SideCell` in `TeamMark.tsx` are the cells every table uses.
+NHL.com codes (LAK, NJD, SJS, TBL) map to the ESPN ones before lookup.
+
 ## Hard rules
 
 - **Edits stay inside this repo.** Read sibling repos freely; never write to them.

@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import type { Edge } from "../lib/api";
-import { ago, evClass, fmtAmerican, fmtClock, marketLabel, matchup, pct, sideLabel, signedPct } from "../lib/format";
+import { ago, evClass, fmtAmerican, fmtClock, marketLabel, pct, sideLabel, signedPct } from "../lib/format";
+import { BookBadge } from "./BookBadge";
+import { HoverTip } from "./HoverTip";
+import { Matchup, SideCell } from "./TeamMark";
 import { Empty, Panel, Pill, Td, Th } from "./Primitives";
 import { ChipGroup, Divider, LINE_OPTS, MultiSelect, PERIOD_OPTS, inputClass, lineOf, periodOf, teamMatch } from "./Filters";
 
@@ -87,9 +90,9 @@ export default function Edges({ rows, minEdge, onOpen }: { rows: Edge[]; minEdge
               <tbody>
                 {shown.map((e) => (
                   <tr key={e.id} className="border-t border-slate-800/60 hover:bg-slate-800/40">
-                    <Td className="cursor-pointer font-medium text-slate-100" onClick={() => onOpen(e.game_id)}>{matchup(e)}</Td><Td mono className="text-slate-400">{fmtClock(e.game_time)}</Td>
-                    <Td>{marketLabel(e.market)}</Td><Td>{sideLabel(e.side, e.point, e.home_abbr, e.away_abbr)}</Td>
-                    <Td className="cursor-pointer text-slate-400 hover:text-slate-200" title="filter to this book" onClick={() => set({ books: [e.sportsbook] })}>{e.sportsbook}</Td>
+                    <Td className="cursor-pointer font-medium text-slate-100" onClick={() => onOpen(e.game_id)}><Matchup g={e} /></Td><Td mono className="text-slate-400">{fmtClock(e.game_time)}</Td>
+                    <Td>{marketLabel(e.market)}</Td><Td><SideCell side={e.side} label={sideLabel(e.side, e.point, e.home_abbr, e.away_abbr)} homeAbbr={e.home_abbr} awayAbbr={e.away_abbr} /></Td>
+                    <Td className="cursor-pointer text-slate-400 hover:text-slate-200" onClick={() => set({ books: [e.sportsbook] })}><HoverTip tip={<span>{e.sportsbook} · click to filter to this book</span>}><span className="inline-flex items-center gap-1.5"><BookBadge name={e.sportsbook} />{e.sportsbook}</span></HoverTip></Td>
                     <Td right mono title={e.price_basis && e.price_basis !== "book" ? `${e.price_basis === "ask" ? "Polymarket ask" : "exchange mid less a haircut"} · quoted mid ${fmtAmerican(e.price_quoted)}` : undefined}>{fmtAmerican(e.price)}{e.price_basis && e.price_basis !== "book" ? <span className="text-slate-500">{e.price_basis === "ask" ? " ask" : " ~"}</span> : null}</Td><Td right mono className="text-slate-400">{fmtAmerican(e.fair_price)}</Td>
                     <Td right mono title={e.push_prob ? `push ${pct(e.push_prob)}` : undefined}>{pct(e.fair_prob)}</Td>
                     <Td right mono className="text-slate-400" title="league-average benches, same ML and total">{e.base_prob === null || e.base_prob === undefined ? "—" : pct(e.base_prob)}</Td>

@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import type { Bet } from "../lib/api";
 import { sendJson } from "../lib/api";
-import { evClass, fmtAmerican, fmtTime, marketLabel, matchup, money, num, pct, sideLabel, signedPct } from "../lib/format";
+import { evClass, fmtAmerican, fmtTime, marketLabel, money, num, pct, sideLabel, signedPct } from "../lib/format";
+import { BookBadge } from "./BookBadge";
+import { HoverTip } from "./HoverTip";
+import { Matchup, SideCell } from "./TeamMark";
 import { Button, Empty, ErrorBox, Panel, Pill, Stat, Td, Th } from "./Primitives";
 import { ChipGroup, DATE_OPTS, Divider, LINE_OPTS, MultiSelect, PERIOD_OPTS, Select, dateRange, inputClass, lineOf, periodOf, teamMatch } from "./Filters";
 
@@ -145,9 +148,9 @@ export default function Bets({ bets, reload, onOpen }: { bets: Bet[]; reload: ()
                 {shown.map((b) => (
                   <tr key={b.id} className="border-t border-slate-800/60 hover:bg-slate-800/30">
                     <Td className="text-slate-500">{fmtTime(b.placed_at)}</Td>
-                    <Td className="cursor-pointer font-medium text-slate-100" onClick={() => onOpen(b.game_id)}>{matchup({ home_abbr: b.home_abbr, away_abbr: b.away_abbr, home_name: b.home_name ?? "", away_name: b.away_name ?? "" })}{b.game_status === "final" ? <span className="ml-1 font-mono text-slate-500">{b.final_away}–{b.final_home}</span> : null}</Td>
-                    <Td>{marketLabel(b.market)}</Td><Td>{sideLabel(b.side, b.point, b.home_abbr, b.away_abbr)}</Td>
-                    <Td className="cursor-pointer text-slate-400 hover:text-slate-200" title="filter to this book" onClick={() => set({ books: [b.sportsbook] })}>{b.sportsbook}{b.source === "manual" ? " ✎" : ""}</Td>
+                    <Td className="cursor-pointer font-medium text-slate-100" onClick={() => onOpen(b.game_id)}><Matchup g={b} />{b.game_status === "final" ? <span className="ml-1 font-mono text-slate-500">{b.final_away}–{b.final_home}</span> : null}</Td>
+                    <Td>{marketLabel(b.market)}</Td><Td><SideCell side={b.side} label={sideLabel(b.side, b.point, b.home_abbr, b.away_abbr)} homeAbbr={b.home_abbr} awayAbbr={b.away_abbr} /></Td>
+                    <Td className="cursor-pointer text-slate-400 hover:text-slate-200" onClick={() => set({ books: [b.sportsbook] })}><HoverTip tip={<span>{b.sportsbook}{b.source === "manual" ? " · papered by hand" : ""} · click to filter to this book</span>}><span className="inline-flex items-center gap-1.5"><BookBadge name={b.sportsbook} />{b.sportsbook}{b.source === "manual" ? " ✎" : ""}</span></HoverTip></Td>
                     <Td right mono>{fmtAmerican(b.price)}</Td><Td right mono>{money(b.stake)}</Td><Td right mono className="text-slate-400">{pct(b.fair_prob)}</Td>
                     <Td right mono className={evClass(b.ev)}>{signedPct(b.ev)}</Td>
                     <Td><Pill tone={b.status === "won" ? "green" : b.status === "lost" ? "red" : b.status === "pending" ? "slate" : "amber"}>{b.status}</Pill></Td>

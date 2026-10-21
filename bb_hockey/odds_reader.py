@@ -211,3 +211,14 @@ def sportsbook_names(engine: Engine) -> Dict[int, dict]:
     with engine.connect() as c:
         rows = c.execute(text("SELECT id, key, name, book_group, is_synthetic FROM current.sportsbooks")).mappings().all()
     return {int(r["id"]): dict(r) for r in rows}
+
+
+def espn_teams(engine: Engine, league: str = "nhl") -> List[dict]:
+    """BB-Odds's ESPN identity rows for a league: abbreviation, display name, logo URL, colours.
+    The fleet's team-identity source (BB-Futures ADR-002): logos are resolved at read time, never stored here."""
+    with engine.connect() as c:
+        rows = c.execute(text("""
+            SELECT abbreviation, display_name, short_display_name, location, logo_url, color, alternate_color
+            FROM current.espn_teams WHERE lower(league) = :lg OR lower(sport) = 'hockey' ORDER BY abbreviation
+        """), {"lg": league.lower()}).mappings().all()
+    return [dict(r) for r in rows]

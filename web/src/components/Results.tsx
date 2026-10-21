@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { ResultRow } from "../lib/api";
-import { fmtTime, matchup, money, num, pct, signedPct } from "../lib/format";
+import { fmtTime, money, num, pct, signedPct } from "../lib/format";
+import { Matchup } from "./TeamMark";
 import { Empty, Panel, Stat, Td, Th } from "./Primitives";
 import { ChipGroup, DATE_OPTS, Divider, Select, dateRange, inputClass, teamMatch } from "./Filters";
 
@@ -91,7 +92,7 @@ export default function Results({ rows, onOpen }: { rows: ResultRow[]; onOpen: (
                 {shown.map((g) => (
                   <tr key={g.id} onClick={() => onOpen(g.id)} className="cursor-pointer border-t border-slate-800/60 hover:bg-slate-800/40">
                     <Td className="text-slate-500">{fmtTime(g.game_time)}</Td>
-                    <Td className="font-medium text-slate-100">{matchup(g)}</Td>
+                    <Td className="font-medium text-slate-100"><Matchup g={g} /></Td>
                     <Td right mono className="text-slate-100">{g.final_away}–{g.final_home}</Td>
                     <Td right mono className="text-slate-400">{g.periods ? g.periods.map((p) => `${p[1]}-${p[0]}`).join(" · ") : "—"}</Td>
                     <Td className="text-slate-400">{g.went_so ? "SO" : g.went_ot ? "OT" : "REG"}</Td>

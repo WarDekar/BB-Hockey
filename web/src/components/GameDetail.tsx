@@ -3,6 +3,8 @@ import type { BoardRow, GameDetail as Detail, QuoteRow } from "../lib/api";
 import { sendJson } from "../lib/api";
 import { ago, evClass, fmtAmerican, fmtTime, marketLabel, money, num, pct, sideLabel, signedPct } from "../lib/format";
 import { Button, Empty, ErrorBox, Panel, Pill, Stat, Td, Th } from "./Primitives";
+import { TeamLogo } from "./TeamLogo";
+import { TeamTag } from "./TeamMark";
 
 const GROUPS: { title: string; markets: string[] }[] = [
   { title: "Full game", markets: ["ml", "3way", "puck"] },
@@ -37,10 +39,10 @@ export default function GameDetail({ detail, reload, minEdge }: { detail: Detail
 
   return (
     <div className="space-y-3">
-      <Panel title={`${game.away_name} at ${game.home_name}`} right={<span>{fmtTime(game.game_time)} · <Pill tone={game.status === "final" ? "blue" : game.status === "live" ? "amber" : "slate"}>{game.status}</Pill></span>}>
+      <Panel title={<span className="inline-flex items-center gap-2 normal-case tracking-normal"><TeamTag abbr={aa} name={game.away_name} size={20} labelOverride={game.away_name} /><span className="text-slate-500">at</span><TeamTag abbr={ha} name={game.home_name} size={20} labelOverride={game.home_name} /></span>} right={<span>{fmtTime(game.game_time)} · <Pill tone={game.status === "final" ? "blue" : game.status === "live" ? "amber" : "slate"}>{game.status}</Pill></span>}>
         {game.status === "final" && (
           <div className="mb-3 flex flex-wrap items-center gap-4 text-sm">
-            <span className="font-mono text-lg text-slate-100">{aa} {game.final_away} – {game.final_home} {ha}{game.went_so ? " (SO)" : game.went_ot ? " (OT)" : ""}</span>
+            <span className="inline-flex items-center gap-2 font-mono text-lg text-slate-100"><TeamLogo abbr={aa} size={22} />{aa} {game.final_away} – {game.final_home} {ha}<TeamLogo abbr={ha} size={22} />{game.went_so ? " (SO)" : game.went_ot ? " (OT)" : ""}</span>
             {game.periods && <span className="font-mono text-xs text-slate-400">periods {game.periods.map((p) => `${p[1]}-${p[0]}`).join(" · ")} (away-home)</span>}
             <span className="text-xs text-slate-500">regulation {game.reg_away}–{game.reg_home}</span>
           </div>

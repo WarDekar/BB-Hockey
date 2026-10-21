@@ -3,6 +3,8 @@ import type { PullAgg, PullBin, PullCoach, PullEpisode, Pulls as PullsData } fro
 import { useApi } from "../hooks";
 import { pct } from "../lib/format";
 import { Empty, ErrorBox, Panel, Stat, Td, Th } from "./Primitives";
+import { TeamLogo } from "./TeamLogo";
+const espnAbbr = (a: string) => ({ LAK: "LA", NJD: "NJ", SJS: "SJ", TBL: "TB" } as Record<string, string>)[a] ?? a;
 import { ChipGroup, Divider, MultiSelect, inputClass } from "./Filters";
 import PullNotes from "./PullNotes";
 
@@ -168,7 +170,7 @@ function PullDesk() {
                     {rows.map((r) => (
                       <tr key={r.coach} className="border-t border-slate-800/60 hover:bg-slate-800/30">
                         <Td className="cursor-pointer font-medium text-slate-100" onClick={() => set({ coaches: [r.coach] })}>{r.coach}</Td>
-                        <Td className={`font-mono ${r.current_team ? "text-ice" : "text-slate-600"}`}>{r.current_team ?? "—"}</Td>
+                        <Td className={`font-mono ${r.current_team ? "text-ice" : "text-slate-600"}`}>{r.current_team ? <span className="inline-flex items-center gap-1.5"><TeamLogo abbr={espnAbbr(r.current_team)} size={16} />{r.current_team}</span> : "—"}</Td>
                         <Td className="font-mono text-slate-500">{r.teams}</Td><Td right mono className="text-slate-500">{r.games}</Td>
                         <Td right mono>{r.situations}</Td>
                         <Td right mono className={cmp(r.pull_rate, L?.pull_rate)}>{r.pull_rate === null ? "—" : pct(r.pull_rate, 0)}</Td>
