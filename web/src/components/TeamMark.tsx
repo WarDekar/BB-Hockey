@@ -4,17 +4,26 @@ import { HoverTip } from "./HoverTip";
 import { TeamLogo } from "./TeamLogo";
 import { teamOf, useTeams } from "../lib/teams";
 
-export function TeamTag({ abbr, name, size = 18, className = "", rotation, labelOverride }: { abbr?: string | null; name?: string | null; size?: number; className?: string; rotation?: number | null; labelOverride?: string }) {
+/**
+ * `pad` fixes the rotation (3 ch, right-aligned) and the code (3 ch, mono) to column
+ * widths so a table of teams lines up whatever the digit count or code length;
+ * `align` says which edge the code hugs (right for an away column, left for home).
+ */
+export function TeamTag({ abbr, name, size = 18, className = "", rotation, labelOverride, pad = false, align = "left" }: {
+  abbr?: string | null; name?: string | null; size?: number; className?: string; rotation?: number | null; labelOverride?: string; pad?: boolean; align?: "left" | "right";
+}) {
   useTeams();
   const t = teamOf(abbr);
   const full = t?.name ?? name ?? abbr ?? "";
   const tip = full || rotation ? <span>{full}{rotation ? <span className="ml-2 font-mono text-slate-400">rot {rotation}</span> : null}</span> : null;
+  const rotCls = pad ? "inline-block w-[3ch] text-right" : "";
+  const codeCls = pad ? `inline-block w-[3ch] font-mono tabular-nums ${align === "right" ? "text-right" : "text-left"}` : "";
   return (
     <HoverTip tip={tip} className={className}>
       <span className="inline-flex items-center gap-1.5">
-        {rotation ? <span className="font-mono text-[10px] text-slate-500">{rotation}</span> : null}
+        {rotation || pad ? <span className={`font-mono text-[10px] text-slate-500 ${rotCls}`}>{rotation ?? ""}</span> : null}
         <TeamLogo abbr={abbr} size={size} />
-        <span>{labelOverride ?? abbr ?? name ?? "—"}</span>
+        <span className={codeCls}>{labelOverride ?? abbr ?? name ?? "—"}</span>
       </span>
     </HoverTip>
   );

@@ -72,12 +72,12 @@ export default function Board({ rows, onOpen }: { rows: SlateRow[]; onOpen: (id:
                   return (
                     <tr key={g.id} onClick={() => onOpen(g.id)} className="cursor-pointer border-t border-slate-800/70 hover:bg-slate-800/40">
                       <Td mono className="text-slate-400">{fmtClock(g.game_time)}</Td>
-                      <Td right className="font-medium text-slate-100"><TeamTag abbr={g.away_abbr} name={g.away_name} rotation={g.away_rotation} /></Td>
+                      <Td right className="font-medium text-slate-100"><TeamTag abbr={g.away_abbr} name={g.away_name} rotation={g.away_rotation} pad align="right" /></Td>
                       <Td className="px-1 text-center text-slate-500">@</Td>
-                      <Td className="font-medium text-slate-100"><TeamTag abbr={g.home_abbr} name={g.home_name} rotation={g.home_rotation} /></Td>
+                      <Td className="font-medium text-slate-100"><TeamTag abbr={g.home_abbr} name={g.home_name} rotation={g.home_rotation} pad /></Td>
                       <Td>{score ? <span className="font-mono text-slate-200">{score}</span> : <Pill tone={g.status === "live" ? "amber" : g.status === "pregame" ? "slate" : "blue"}>{g.status}</Pill>}</Td>
                       <Td right mono title={i ? `consensus home ${pct(i.p_home)} · ${i.consensus_at ?? ""}` : undefined}>{i ? `${fmtAmerican(probToAmerican(i.p_home))} / ${fmtAmerican(probToAmerican(1 - i.p_home))}` : "—"}</Td>
-                      <Td right mono title={i ? `over ${pct(i.p_over)}${i.total_assumed ? " (assumed)" : ""}` : undefined}>{i ? `${i.total_point}${i.total_assumed ? "*" : ""}` : "—"}</Td>
+                      <Td right mono title={i ? `over ${pct(i.p_over)}${i.total_assumed ? " (assumed)" : ""}` : undefined}>{i ? <><span className="inline-block w-[3ch] text-left">{i.total_point}</span>{i.total_assumed ? "*" : ""}</> : "—"}</Td>
                       <Td right mono className="text-slate-400">{s ? `${num(s.lambda_home)} / ${num(s.lambda_away)}` : "—"}</Td>
                       <Td right mono title="fair cover probability for the favourite −1.5: league-average benches → these benches">{puckCell(s, i, "m15")}</Td>
                       <Td right mono title="fair cover probability for the underdog +2.5: league-average benches → these benches">{puckCell(s, i, "p25")}</Td>
