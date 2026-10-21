@@ -65,3 +65,22 @@ export interface Calibration {
 }
 export interface ResultRow extends Game { closing_summary: Summary | null; closing_inputs: Inputs | null; n_bets: number; pnl: number }
 export interface Params { params: Record<string, number | number[]>; defaults: Record<string, number | number[]> }
+
+export interface PullEpisode {
+  id: number; game_id: number; season: number; game_type: number; game_date: string; team_abbr: string; is_home: boolean; coach: string | null;
+  opp_abbr: string; opp_coach: string | null; episode_no: number; kind: string; source: string; period: number; period_type: string;
+  pull_elapsed_s: number; pull_remaining_s: number; end_elapsed_s: number; duration_s: number; ended_by: string;
+  score_for: number; score_against: number; deficit: number; goals_for: number; goals_against: number;
+  final_for: number; final_against: number; reg_for: number; reg_against: number; went_ot: boolean;
+}
+export interface PullSituation {
+  game_id: number; season: number; game_type: number; game_date: string; team: string; is_home: boolean; coach: string | null; opp: string; opp_coach: string | null;
+  late_deficits: number[]; max_late_deficit: number | null; final_for: number; final_against: number; reg_for: number; reg_against: number;
+  went_ot: boolean; went_so: boolean; source: string | null;
+  pulls: { deficit: number; remaining_s: number; duration_s: number; goals_for: number; goals_against: number; ended_by: string; period: number }[];
+}
+export interface Pulls {
+  situations: PullSituation[]; episodes: PullEpisode[]; seasons: number[];
+  coaches: { league: string; team: string; coach: string; start_date: string; end_date: string | null; games: number }[];
+  ingest: { season: number; games: number; errors: number; pbp_only: number; last_date: string }[];
+}

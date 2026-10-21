@@ -8,14 +8,14 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 
-from .. import __version__, calibration, odds_reader, paper
+from .. import __version__, calibration, odds_reader, paper, pbp
 from ..config import settings
 from ..db import hockey_engine, odds_engine
 from ..edges import best_per_side, evaluate_quotes
 from ..model.goals import MARKETS, ModelParams
 from ..model.odds_math import ev_per_unit, fair_price_no_push, kelly_fraction
 from ..pricer import latest_snapshot, load_params, model_from_snapshot, save_params
-from ..worker import pricing_pass, settlement_pass
+from ..worker import pbp_pass, pricing_pass, settlement_pass
 
 router = APIRouter()
 
@@ -209,3 +209,22 @@ def run_pricing() -> dict:
 @router.post("/run/settlement")
 def run_settlement() -> dict:
     return settlement_pass(odds_engine(), hockey_engine())
+
+
+@router.get("/pulls")
+def pulls(season: Optional[str] = None) -> dict:
+    """Goalie-pull analysis: per team-game situations + every episode (NHL.com play-by-play)."""
+    seasons = [int(x) for x in season.split(",") if x.strip().isdigit()] if season else None
+    out = pbp.situations(hockey_engine(), seasons)
+    out["coaches"] = _rows("SELECT league, team, coach, start_date, end_date, games FROM coaches ORDER BY team, start_date")
+    out["ingest"] = _rows("""
+        SELECT season, count(*) AS games, count(*) FILTER (WHERE error IS NOT NULL) AS errors,
+               count(*) FILTER (WHERE pull_source = 'pbp') AS pbp_only, max(game_date) AS last_date
+        FROM nhl_games WHERE game_type IN (2, 3) GROUP BY season ORDER BY season DESC
+    """)
+    return out
+
+
+@router.post("/run/pbp")
+def run_pbp() -> dict:
+    return pbp_pass(odds_engine(), hockey_engine())

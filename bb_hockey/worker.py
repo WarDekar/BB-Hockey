@@ -84,6 +84,18 @@ def settlement_pass(odds: Engine, hockey: Engine, params: Optional[ModelParams] 
     return out
 
 
+def pbp_pass(odds: Engine, hockey: Engine, params: Optional[ModelParams] = None) -> dict:
+    """Ingest NHL.com play-by-play / shift charts for any final of the last two days."""
+    from . import pbp
+    out = pbp.ingest_recent(hockey)
+    note = f"{len(out['ingested'])} ingested, {len(out['failed'])} failed"
+    if out["ingested"]:
+        note += ": " + ", ".join(f"{r['score']} ({len(r['pulls'])} pulls)" for r in out["ingested"][:6])
+    heartbeat(hockey, "pbp", not out["failed"] or bool(out["ingested"]), note)
+    logger.info("pbp pass: %s", note)
+    return {"ingested": [r["id"] for r in out["ingested"]], "failed": out["failed"], "top": []}
+
+
 async def run_forever(odds: Engine, hockey: Engine, on_update: Optional[Callable[[dict], "object"]] = None) -> None:
     """asyncio driver: pricing every ``price_interval``, settlement every ``settle_interval``."""
     import asyncio
@@ -103,7 +115,8 @@ async def run_forever(odds: Engine, hockey: Engine, on_update: Optional[Callable
             await asyncio.sleep(interval)
 
     await asyncio.gather(loop("pricing", pricing_pass, settings.price_interval),
-                         loop("settlement", settlement_pass, settings.settle_interval))
+                         loop("settlement", settlement_pass, settings.settle_interval),
+                         loop("pbp", pbp_pass, settings.pbp_interval))
 
 
 if __name__ == "__main__":

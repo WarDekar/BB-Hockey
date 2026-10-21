@@ -5,13 +5,14 @@ import Calibration from "./components/Calibration";
 import Edges from "./components/Edges";
 import GameDetail from "./components/GameDetail";
 import Params from "./components/Params";
+import Pulls from "./components/Pulls";
 import { Button, Empty, ErrorBox } from "./components/Primitives";
 import Results from "./components/Results";
 import { useApi, useHash } from "./hooks";
-import type { Bet, BetSummary, Calibration as Calib, Edge, GameDetail as Detail, Health, Params as P, ResultRow, SlateRow } from "./lib/api";
+import type { Bet, BetSummary, Calibration as Calib, Edge, GameDetail as Detail, Health, Params as P, Pulls as PullsData, ResultRow, SlateRow } from "./lib/api";
 import { ago, money } from "./lib/format";
 
-const TABS = ["board", "edges", "bets", "results", "calibration", "params"] as const;
+const TABS = ["board", "edges", "bets", "results", "pulls", "calibration", "params"] as const;
 type Tab = (typeof TABS)[number];
 
 export default function App() {
@@ -24,6 +25,7 @@ export default function App() {
   const bets = useApi<Bet[]>(tab === "bets" ? "/bets?limit=5000" : null, 60000);
   const betSummary = useApi<BetSummary>(tab === "bets" ? "/bets/summary" : null, 60000);
   const results = useApi<ResultRow[]>(tab === "results" ? "/results?days=365" : null, 120000);
+  const pulls = useApi<PullsData>(tab === "pulls" ? "/pulls" : null, 0, false);
   const calib = useApi<Calib>(tab === "calibration" ? "/calibration" : null, 0);
   const params = useApi<P>(tab === "params" ? "/params" : null, 0, false);
   const detail = useApi<Detail>(gameId ? `/games/${gameId}` : null, 30000);
@@ -79,6 +81,8 @@ export default function App() {
           bets.error ? <ErrorBox error={bets.error} /> : bets.data ? <Bets bets={bets.data} reload={() => { bets.reload(); betSummary.reload(); }} onOpen={open} /> : <Empty>Loading…</Empty>
         ) : tab === "results" ? (
           results.error ? <ErrorBox error={results.error} /> : results.data ? <Results rows={results.data} onOpen={open} /> : <Empty>Loading…</Empty>
+        ) : tab === "pulls" ? (
+          pulls.error ? <ErrorBox error={pulls.error} /> : pulls.data ? <Pulls data={pulls.data} /> : <Empty>Loading three seasons of play-by-play…</Empty>
         ) : tab === "calibration" ? (
           calib.error ? <ErrorBox error={calib.error} /> : calib.data ? <Calibration data={calib.data} /> : <Empty>Loading…</Empty>
         ) : (

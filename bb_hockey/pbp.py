@@ -446,3 +446,69 @@ if __name__ == "__main__":
         print("tenures:", rebuild_coaches(eng))
     else:
         print(json.dumps(ingest_recent(eng), indent=1, default=str))
+
+
+# ----------------------------------------------------------------------------- analysis
+def situations(engine: Engine, seasons: Optional[List[int]] = None) -> dict:
+    """Per team-game rows for the coach table plus every goalie episode.
+
+    ``late_deficits`` is the set of deficits the team faced inside the last
+    three minutes of regulation (score at 17:00 of P3, then after each later
+    goal), so "down 1 late" means the team was down exactly one at some point
+    with the clock under 3:00, whether or not it pulled.
+    """
+    where = "g.error IS NULL AND g.game_type IN (2, 3)" + (" AND g.season = ANY(:s)" if seasons else "")
+    params = {"s": seasons} if seasons else {}
+    with engine.connect() as c:
+        games = c.execute(text(f"""
+            SELECT g.id, g.season, g.game_type, g.game_date, g.home_abbr, g.away_abbr, g.home_coach, g.away_coach,
+                   g.home_score, g.away_score, g.reg_home, g.reg_away, g.went_ot, g.went_so, g.pull_source,
+                   l.away_score AS a1700, l.home_score AS h1700
+            FROM nhl_games g
+            LEFT JOIN LATERAL (
+                SELECT away_score, home_score FROM nhl_plays p
+                WHERE p.game_id = g.id AND (p.period < 3 OR (p.period = 3 AND p.elapsed_s <= 1020))
+                ORDER BY p.period DESC, p.elapsed_s DESC, p.sort_order DESC LIMIT 1) l ON true
+            WHERE {where} ORDER BY g.game_date, g.id
+        """), params).mappings().all()
+        late_goals = c.execute(text(f"""
+            SELECT p.game_id, p.elapsed_s, p.away_score, p.home_score FROM nhl_plays p JOIN nhl_games g ON g.id = p.game_id
+            WHERE {where} AND p.type = 'goal' AND p.period = 3 AND p.elapsed_s > 1020 ORDER BY p.game_id, p.sort_order
+        """), params).mappings().all()
+        episodes = [dict(r) for r in c.execute(text(f"""
+            SELECT e.* FROM goalie_pulls e JOIN nhl_games g ON g.id = e.game_id WHERE {where} ORDER BY e.game_date, e.game_id, e.team_abbr, e.episode_no
+        """), params).mappings().all()]
+    goals_by_game: Dict[int, list] = {}
+    for r in late_goals:
+        goals_by_game.setdefault(int(r["game_id"]), []).append(r)
+    eps_by_tg: Dict[Tuple[int, str], list] = {}
+    for e in episodes:
+        eps_by_tg.setdefault((int(e["game_id"]), e["team_abbr"]), []).append(e)
+    rows = []
+    for g in games:
+        for is_home in (True, False):
+            team = g["home_abbr"] if is_home else g["away_abbr"]
+            def deficit(a, h):
+                return (a - h) if is_home else (h - a)
+            late = []
+            if g["a1700"] is not None:
+                late.append(deficit(g["a1700"], g["h1700"]))
+            for lg in goals_by_game.get(int(g["id"]), []):
+                late.append(deficit(lg["away_score"], lg["home_score"]))
+            eps = eps_by_tg.get((int(g["id"]), team), [])
+            pulls = [e for e in eps if e["kind"] == "pull"]
+            rows.append({
+                "game_id": int(g["id"]), "season": g["season"], "game_type": g["game_type"], "game_date": g["game_date"].isoformat(),
+                "team": team, "is_home": is_home, "coach": g["home_coach"] if is_home else g["away_coach"],
+                "opp": g["away_abbr"] if is_home else g["home_abbr"], "opp_coach": g["away_coach"] if is_home else g["home_coach"],
+                "late_deficits": sorted(set(late)), "max_late_deficit": max(late) if late else None,
+                "final_for": g["home_score"] if is_home else g["away_score"], "final_against": g["away_score"] if is_home else g["home_score"],
+                "reg_for": g["reg_home"] if is_home else g["reg_away"], "reg_against": g["reg_away"] if is_home else g["reg_home"],
+                "went_ot": g["went_ot"], "went_so": g["went_so"], "source": g["pull_source"],
+                "pulls": [{"deficit": e["deficit"], "remaining_s": e["pull_remaining_s"], "duration_s": e["duration_s"], "goals_for": e["goals_for"],
+                           "goals_against": e["goals_against"], "ended_by": e["ended_by"], "period": e["period"]} for e in pulls],
+            })
+    for e in episodes:
+        e["game_date"] = e["game_date"].isoformat()
+    seasons_seen = sorted({int(g["season"]) for g in games}, reverse=True)
+    return {"situations": rows, "episodes": episodes, "seasons": seasons_seen}
