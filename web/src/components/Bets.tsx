@@ -14,9 +14,9 @@ export default function Bets({ bets, summary, reload, onOpen }: { bets: Bet[]; s
   };
   const s = summary;
   return (
-    <div className="space-y-3">
+    <div className="flex h-full min-h-0 flex-col gap-3">
       {s && (
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-8">
+        <div className="grid shrink-0 grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-8">
           <Stat label="Pending" value={s.pending} />
           <Stat label="Settled" value={s.settled} sub={`${s.won}–${s.lost}–${s.pushed}`} />
           <Stat label="Staked" value={money(s.staked)} />
@@ -27,14 +27,14 @@ export default function Bets({ bets, summary, reload, onOpen }: { bets: Bet[]; s
           <Stat label="Avg CLV (price)" value={signedPct(s.avg_clv_price)} sub="vs same book's close" />
         </div>
       )}
-      {err && <ErrorBox error={err} />}
-      <Panel title="Ledger" right={<span className="flex items-center gap-1">{["all", "pending", "won", "lost", "push", "void"].map((f) => (
+      {err && <div className="shrink-0"><ErrorBox error={err} /></div>}
+      <Panel className="flex min-h-0 flex-1 flex-col" bodyClassName="flex min-h-0 flex-1 flex-col p-3" title="Ledger" right={<span className="flex items-center gap-1">{["all", "pending", "won", "lost", "push", "void"].map((f) => (
         <button key={f} onClick={() => setFilter(f)} className={`rounded px-1.5 py-0.5 text-[11px] ${filter === f ? "bg-accent/20 text-accent" : "text-slate-500 hover:text-slate-300"}`}>{f}</button>
       ))}<span className="ml-2">{shown.length}</span></span>}>
         {!shown.length ? <Empty>No paper bets{filter !== "all" ? ` with status ${filter}` : ""}. Auto-paper takes the best price on every edge above the threshold; the game page papers anything by hand.</Empty> : (
-          <div className="overflow-x-auto scrollbar-thin">
+          <div className="min-h-0 flex-1 overflow-auto scrollbar-thin">
             <table className="w-full text-xs">
-              <thead><tr><Th>Placed</Th><Th>Game</Th><Th>Market</Th><Th>Side</Th><Th>Book</Th><Th right>Price</Th><Th right>Stake</Th><Th right>Fair</Th><Th right>EV</Th><Th>Status</Th><Th right>P&L</Th><Th right>Close fair</Th><Th right>CLV model</Th><Th right>CLV price</Th><Th></Th></tr></thead>
+              <thead className="sticky top-0 z-[1] bg-slate-900 shadow-[0_1px_0_0_var(--color-slate-800)]"><tr><Th>Placed</Th><Th>Game</Th><Th>Market</Th><Th>Side</Th><Th>Book</Th><Th right>Price</Th><Th right>Stake</Th><Th right>Fair</Th><Th right>EV</Th><Th>Status</Th><Th right>P&L</Th><Th right>Close fair</Th><Th right>CLV model</Th><Th right>CLV price</Th><Th></Th></tr></thead>
               <tbody>
                 {shown.map((b) => (
                   <tr key={b.id} className="border-t border-slate-800/60 hover:bg-slate-800/30">
@@ -58,7 +58,9 @@ export default function Bets({ bets, summary, reload, onOpen }: { bets: Bet[]; s
         )}
       </Panel>
       {s && s.by_market.length > 0 && (
-        <Panel title="By market">
+        <details className="shrink-0 rounded-lg border border-slate-800 bg-slate-900">
+          <summary className="cursor-pointer select-none px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">By market</summary>
+          <div className="border-t border-slate-800 p-3">
           <table className="w-full text-xs">
             <thead><tr><Th>Market</Th><Th right>Bets</Th><Th right>W–L</Th><Th right>Staked</Th><Th right>P&L</Th><Th right>ROI</Th><Th right>Avg EV</Th><Th right>Avg CLV</Th></tr></thead>
             <tbody>
@@ -72,7 +74,8 @@ export default function Bets({ bets, summary, reload, onOpen }: { bets: Bet[]; s
             </tbody>
           </table>
           <p className="mt-2 text-[11px] text-slate-500">Stakes: quarter-Kelly on a 100-unit bankroll, capped at 1 unit ({num(100, 0)}). CLV (model) is the closing-consensus model's fair minus the fair at placement; CLV (price) is the taken price against the same book's last pre-start quote.</p>
-        </Panel>
+          </div>
+        </details>
       )}
     </div>
   );

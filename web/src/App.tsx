@@ -38,8 +38,8 @@ export default function App() {
   )), [tab, gameId, setHash]);
 
   return (
-    <div className="min-h-screen">
-      <header className="sticky top-0 z-10 border-b border-slate-800 bg-slate-900/95 backdrop-blur">
+    <div className="flex h-dvh flex-col">
+      <header className="z-10 shrink-0 border-b border-slate-800 bg-slate-900/95 backdrop-blur">
         <div className="mx-auto flex max-w-[1920px] flex-wrap items-center gap-x-4 gap-y-2 px-6 py-2.5 max-sm:px-3">
           <div className="mr-2 flex select-none items-center gap-2">
             <svg viewBox="0 0 40 40" className="h-10 w-10 shrink-0" aria-hidden="true">
@@ -67,7 +67,7 @@ export default function App() {
           </span>
         </div>
       </header>
-      <main className="mx-auto max-w-[1920px] px-6 py-4 max-sm:px-3">
+      <main className="mx-auto min-h-0 w-full max-w-[1920px] flex-1 overflow-y-auto px-6 py-4 max-sm:px-3 scrollbar-thin">
         {health.error && <div className="mb-3"><ErrorBox error={`API unreachable: ${health.error}`} /></div>}
         {gameId ? (
           detail.error ? <ErrorBox error={detail.error} /> : detail.data ? <GameDetail detail={detail.data} reload={detail.reload} minEdge={minEdge} /> : <Empty>Loading…</Empty>
@@ -85,7 +85,7 @@ export default function App() {
           params.error ? <ErrorBox error={params.error} /> : params.data ? <Params data={params.data} reload={params.reload} /> : <Empty>Loading…</Empty>
         )}
       </main>
-      <footer className="px-6 py-3 text-[11px] text-slate-600">BB-Hockey · slot 18 · paper only · fairs from a diagonal-inflated Poisson fitted to BB-Odds's devigged consensus ML + total · P&L {money(betSummary.data?.pnl ?? null)}</footer>
+      <footer className="shrink-0 px-6 py-3 text-[11px] text-slate-600">BB-Hockey · slot 18 · paper only · fairs from a diagonal-inflated Poisson fitted to BB-Odds's devigged consensus ML + total · P&L {money(betSummary.data?.pnl ?? null)}</footer>
     </div>
   );
 }

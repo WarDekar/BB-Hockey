@@ -1,14 +1,14 @@
 import type { ReactNode } from "react";
 
-export const Panel = ({ title, right, children, className = "" }: { title?: ReactNode; right?: ReactNode; children: ReactNode; className?: string }) => (
+export const Panel = ({ title, right, children, className = "", bodyClassName = "p-3" }: { title?: ReactNode; right?: ReactNode; children: ReactNode; className?: string; bodyClassName?: string }) => (
   <section className={`rounded-lg border border-slate-800 bg-slate-900 ${className}`}>
     {(title || right) && (
-      <header className="flex items-center justify-between gap-3 border-b border-slate-800 px-3 py-2">
+      <header className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-800 px-3 py-2">
         <h2 className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">{title}</h2>
         <div className="text-xs text-slate-500">{right}</div>
       </header>
     )}
-    <div className="p-3">{children}</div>
+    <div className={bodyClassName}>{children}</div>
   </section>
 );
 
