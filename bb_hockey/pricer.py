@@ -16,7 +16,7 @@ from sqlalchemy import text
 from sqlalchemy.engine import Connection, Engine
 
 from .config import settings
-from .model.goals import GameModel, ModelParams, fit_lambdas
+from .model.goals import GameModel, ModelParams, fit_lambdas, over_prob_conditional
 from .model.odds_math import devig_two_way
 from .teams import resolve
 
@@ -120,6 +120,9 @@ def fit_from_inputs(inputs: dict, params: ModelParams, return_base: bool = False
     summary.update(diag)
     summary["market_check"] = market_check(model, inputs)
     summary["puck"] = puck_summary(model)
+    # The quoted total under the benches vs at league benches (the baseline reproduces the market by construction).
+    summary["total_line"] = {"point": inputs["total_point"], "p_over": round(over_prob_conditional(model, inputs["total_point"]), 5),
+                             "base": round(over_prob_conditional(base, inputs["total_point"]), 5)}
     summary["baseline"] = {"lambda_home": round(base.lh, 4), "lambda_away": round(base.la, 4), "eng": {k: round(v, 4) for k, v in base.eng.items()},
                            "p_draw": round(base.p_draw, 5), "puck": puck_summary(base)}
     return (model, summary, base) if return_base else (model, summary)
@@ -199,6 +202,8 @@ def _inputs_moved(prev: Optional[dict], new: dict) -> bool:
     if not prev:
         return True
     pi = prev["inputs"]
+    if "total_line" not in (prev.get("summary") or {}):
+        return True   # summary schema changed (2026-10-21): re-snapshot once so the slate carries the new fields
     return (abs(pi.get("p_home", 0) - new["p_home"]) > INPUT_TOL
             or abs(pi.get("p_over", 0) - new["p_over"]) > INPUT_TOL
             or pi.get("total_point") != new["total_point"]

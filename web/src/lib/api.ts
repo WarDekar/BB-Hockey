@@ -32,7 +32,7 @@ export interface MarketCheck { point: number | null; market: number; model: numb
 export interface Summary {
   lambda_home: number; lambda_away: number; p_home: number; p_reg_home: number; p_draw: number; p_reg_away: number;
   p_tie_home: number; exp_total: number; exp_reg_total: number; converged?: boolean; market_check?: Record<string, MarketCheck>;
-  eng?: Record<string, number>; puck?: Record<string, number>; baseline?: { lambda_home: number; lambda_away: number; eng: Record<string, number>; p_draw: number; puck: Record<string, number> };
+  eng?: Record<string, number>; puck?: Record<string, number>; total_line?: { point: number; p_over: number; base: number }; baseline?: { lambda_home: number; lambda_away: number; eng: Record<string, number>; p_draw: number; puck: Record<string, number> };
 }
 export interface EngCoach { team: string | null; coach: string | null; lead1: { n: number; k: number; raw: number | null } | null; lead2: { n: number; k: number; raw: number | null } | null }
 export interface EngInputs { rates: { home_lead1: number; away_lead1: number; home_lead2: number; away_lead2: number; home_lead1_goal?: number; away_lead1_goal?: number; home_lead2_goal?: number; away_lead2_goal?: number }; home_coach: EngCoach; away_coach: EngCoach; league: { lead1: number; lead2: number; n1: number; n2: number; goal1?: number | null; goal2?: number | null }; prior_games: number; source: string }
