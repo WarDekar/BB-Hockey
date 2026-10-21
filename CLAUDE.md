@@ -112,7 +112,20 @@ least 20 s long); the pull rules live in `derive_pulls`. NHL abbreviations
    the AWAY coach's own conversion (he pulls), shrunk to the league with
    `eng_prior_games` = 40, via `pbp.eng_for_game`; the rates ride in the
    snapshot `inputs.eng` so re-pricing, the closing model and CLV agree.
-   `coach_eng = 0` in Params falls back to the two league rates.
+   `coach_eng = 0` in Params falls back to the two league rates. Also measured:
+   `eng_chain` 0.18 (a second empty-netter after the first), `eng_rate3` 0.14
+   (three-goal leads → four), and `strength_sigma` 0.35 (pregame strength
+   uncertainty mixed into the rate ratio; widens margins, not totals). All
+   validated on 1,743 historical finals with closing lines (SBR archive,
+   2021-22 + Oct–Nov 2022): fav −1.5 41.3% model vs 41.4% real (market
+   40.4%), −2.5 28.9 vs 29.0, dog +2.5 71.1 vs 71.0. Residuals: −3.5 two
+   points generous; totals under-produce odd numbers (7: 18.4% vs 21.1%);
+   at ≥68% favourites the dog +2.5 is 5 points better than modelled. See
+   `docs/model/2026-10-20-baseline-validation.md`.
+7. **Every live snapshot carries a league-baseline board** (`board_base`,
+   `summary.baseline`): the same ML + total with league-average empty-net
+   rates. Edges carry `base_prob` / `base_ev`; the Edges tab's source chips
+   split bench-driven edges from ones that exist at baseline too.
 
 ## Key files
 

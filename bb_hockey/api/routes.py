@@ -186,6 +186,7 @@ class ParamsBody(BaseModel):
     eng_chain: Optional[float] = None
     eng_rate3: Optional[float] = None
     eng_prior_games: Optional[int] = None
+    strength_sigma: Optional[float] = None
     coach_eng: Optional[bool] = None
     ot_decided_share: Optional[float] = None
     ot_skill_k: Optional[float] = None

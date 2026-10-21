@@ -64,6 +64,7 @@ class ModelParams:
     eng_chain: float = 0.18       # of one-goal leads that took the empty-netter, the share that take a second (down 1 late, lost by 2+ → by 3+)
     eng_rate3: float = 0.14       # league: three-goal leads that become four (down 3 late, lost by 3+ → by 4+)
     eng_prior_games: int = 40     # shrinkage weight toward the league for a coach's own rate
+    strength_sigma: float = 0.35  # sd of the log rate-ratio around the fitted one (pregame strength is uncertain): widens margins, 5-point mixture
     coach_eng: bool = True        # use the trailing side's coach rates when the benches are known
     ot_decided_share: float = 0.65
     ot_skill_k: float = 0.5
@@ -99,6 +100,8 @@ def _inflated_matrix(lh: float, la: float, n: int, inflation: float) -> np.ndarr
 
 
 ENG_KEYS = ("home_lead1", "away_lead1", "home_lead2", "away_lead2")
+_GH_NODES, _GH_WEIGHTS = np.polynomial.hermite_e.hermegauss(5)
+_GH_WEIGHTS = _GH_WEIGHTS / _GH_WEIGHTS.sum()
 
 
 def _apply_empty_net(m: np.ndarray, eng: Dict[str, float], chain: float = 0.0, rate3: float = 0.0) -> np.ndarray:
@@ -153,8 +156,17 @@ class GameModel:
         n = p.max_goals
         self.n = n
         self.eng = resolve_eng(p, eng)
-        self.reg = _apply_empty_net(_inflated_matrix(lh, la, n, p.draw_inflation), self.eng,
-                                    chain=getattr(p, "eng_chain", 0.0), rate3=getattr(p, "eng_rate3", 0.0))
+        sigma = float(getattr(p, "strength_sigma", 0.0) or 0.0)
+        if sigma > 0:
+            # Mixture over the strength uncertainty: the true log rate-ratio is the fitted one plus N(0, σ²).
+            # Gauss-Hermite with five nodes; the total is held, only the split moves, so this widens margins, not totals.
+            self.reg = np.zeros((n + 1, n + 1))
+            for z, w in zip(_GH_NODES, _GH_WEIGHTS):
+                self.reg += w * _apply_empty_net(_inflated_matrix(lh * np.exp(sigma * z / 2), la * np.exp(-sigma * z / 2), n, p.draw_inflation), self.eng,
+                                                 chain=getattr(p, "eng_chain", 0.0), rate3=getattr(p, "eng_rate3", 0.0))
+        else:
+            self.reg = _apply_empty_net(_inflated_matrix(lh, la, n, p.draw_inflation), self.eng,
+                                        chain=getattr(p, "eng_chain", 0.0), rate3=getattr(p, "eng_rate3", 0.0))
         idx = np.arange(n + 1)
         H, A = np.meshgrid(idx, idx, indexing="ij")
         self.p_reg_home = float(self.reg[H > A].sum())

@@ -10,6 +10,7 @@ const FIELDS: { key: string; label: string; help: string; step: number }[] = [
   { key: "eng_chain", label: "Second empty-netter", help: "Of one-goal leads that took the empty-netter, the share that take a second (pull, concede, pull again). Measured 0.18: down 1 late and lost by 2+, 18% lost by 3+. Moves margin-2 mass to margin 3.", step: 0.02 },
   { key: "eng_rate3", label: "Empty-net rate, 3-goal leads", help: "Share of three-goal wins that become four. Measured 0.14. Drives the ±3.5 alternates.", step: 0.02 },
   { key: "eng_prior_games", label: "Coach shrinkage (games)", help: "Weight of the league rate when blending a coach's own empty-net record: rate = (k + w·league) / (n + w). 40 ≈ one season of late deficits.", step: 5 },
+  { key: "strength_sigma", label: "Strength uncertainty σ", help: "Pregame strength is uncertain: the log rate-ratio is mixed around the fitted one with this sd (5-point Gauss-Hermite). Widens margins without moving totals. 0.35 fitted on 1,743 historical finals; 0 = off.", step: 0.05 },
   { key: "coach_eng", label: "Use coach rates (1/0)", help: "1 = per-game empty-net rates from the trailing side's coach (Pulls tab); 0 = the two league rates above for every game.", step: 1 },
   { key: "ot_decided_share", label: "OT decided share", help: "Of games tied after 60, the share decided in 3v3 OT rather than the shootout.", step: 0.05 },
   { key: "ot_skill_k", label: "OT skill k", help: "Home OT win prob = 0.5 + k·(p_reg_home − p_reg_away).", step: 0.1 },
