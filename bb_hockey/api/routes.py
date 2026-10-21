@@ -222,6 +222,12 @@ def pulls(deficit: int = 1, season: Optional[str] = None, game_type: Optional[in
     return out
 
 
+@router.get("/pulls/notes")
+def pull_notes() -> dict:
+    """Cliff notes per current head coach: puck-line and alt-puck-line leans from late-deficit outcomes."""
+    return pbp.coach_notes(hockey_engine())
+
+
 @router.post("/run/pbp")
 def run_pbp() -> dict:
     return pbp_pass(odds_engine(), hockey_engine())

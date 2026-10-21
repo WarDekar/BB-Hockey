@@ -4,6 +4,7 @@ import { useApi } from "../hooks";
 import { pct } from "../lib/format";
 import { Empty, ErrorBox, Panel, Stat, Td, Th } from "./Primitives";
 import { ChipGroup, Divider, MultiSelect, inputClass } from "./Filters";
+import PullNotes from "./PullNotes";
 
 // Goalie-pull desk. Everything is aggregated server-side (GET /pulls) over the
 // materialized situations view; the tab only sends its filters and draws.
@@ -75,6 +76,19 @@ function TimingChart({ bins, binS, median }: { bins: PullBin[]; binS: number; me
 }
 
 export default function Pulls() {
+  const [view, setView] = useState<"notes" | "desk">(() => { try { return localStorage.getItem("bbh_pulls_view") === "desk" ? "desk" : "notes"; } catch { return "notes"; } });
+  useEffect(() => { try { localStorage.setItem("bbh_pulls_view", view); } catch { /* private mode */ } }, [view]);
+  const switcher = (
+    <div className="flex shrink-0 items-center gap-2">
+      <ChipGroup value={view} onChange={(v) => setView(v === "desk" ? "desk" : "notes")} options={[["notes", "Coach notes"], ["desk", "Pull desk"]]} />
+      <span className="text-[11px] text-slate-500">{view === "notes" ? "who to bet on the puck line and the +2.5, by current bench" : "every coach, every pull, with filters"}</span>
+    </div>
+  );
+  if (view === "notes") return <div className="flex h-full min-h-0 flex-col gap-3">{switcher}<PullNotes /></div>;
+  return <div className="flex h-full min-h-0 flex-col gap-3">{switcher}<PullDesk /></div>;
+}
+
+function PullDesk() {
   const [f, setF] = useState<Filters>(load);
   const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: "situations", dir: -1 });
   useEffect(() => { try { localStorage.setItem(KEY, JSON.stringify({ ...f, search: "" })); } catch { /* private mode */ } }, [f]);

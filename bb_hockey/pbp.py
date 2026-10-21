@@ -620,3 +620,101 @@ def pull_report(engine: Engine, deficit: int = 1, seasons=None, game_type=None, 
     for i in ingest:
         i["last_date"] = i["last_date"].isoformat() if i["last_date"] else None
     return {"deficit": k, "league": league, "by_coach": by_coach, "bins": bins, "bin_s": bin_s, "episodes": episodes, "options": options, "ingest": ingest}
+
+
+# ----------------------------------------------------------------------------- coach notes (current benches, puck-line leans)
+_NOTE_SQL = """
+    WITH p AS (
+        SELECT game_id, team_abbr AS team, deficit, max(pull_remaining_s) AS t,
+               bool_or(goals_against > 0) AS en, bool_or(goals_for > 0) AS scored
+        FROM goalie_pulls WHERE kind = 'pull' GROUP BY 1, 2, 3
+    )
+    SELECT {group_col} AS coach, count(*) AS n, count(*) FILTER (WHERE s.season = :cur) AS n_this,
+           (avg((p.t IS NOT NULL)::int))::float AS pull_rate,
+           percentile_cont(0.5) WITHIN GROUP (ORDER BY p.t) AS median_s,
+           (avg(p.en::int) FILTER (WHERE p.t IS NOT NULL))::float AS en,
+           (avg(p.scored::int) FILTER (WHERE p.t IS NOT NULL))::float AS scored,
+           (avg((s.final_against - s.final_for >= :k + 1)::int))::float AS lose_big,
+           (avg((s.final_against - s.final_for = :k)::int))::float AS lose_by_k,
+           (avg((s.final_for >= s.final_against)::int))::float AS point,
+           (avg(s.went_ot::int))::float AS ot,
+           (avg(s.late_goals))::float AS late_goals,
+           (avg((s.late_goals >= 1)::int))::float AS late1,
+           (avg((s.late_goals >= 2)::int))::float AS late2
+    FROM pull_situations s LEFT JOIN p ON p.game_id = s.game_id AND p.team = s.team AND p.deficit = :k
+    WHERE {where} GROUP BY 1
+"""
+
+
+def coach_notes(engine: Engine) -> dict:
+    """Cliff notes per current NHL head coach: when his team trails by 1 (2) inside 3:00, how often it
+    ends up losing by 2+ (3+), i.e. whether the opponent's -1.5 (his +2.5) cashes, against the league."""
+    with engine.connect() as c:
+        cur_season = int(c.execute(text("SELECT max(season) FROM pull_situations")).scalar() or 0)
+        current = [dict(r) for r in c.execute(text("SELECT coach, team, start_date, games FROM coaches WHERE league = 'NHL' AND end_date IS NULL ORDER BY team")).mappings()]
+        league, per = {}, {}
+        for k in (1, 2):
+            in_def = f"{k} = ANY(s.late_deficits)"
+            league[k] = dict(c.execute(text(_NOTE_SQL.format(group_col="'league'", where=in_def)), {"k": k, "cur": cur_season}).mappings().first())
+            per[k] = {r["coach"]: dict(r) for r in c.execute(text(_NOTE_SQL.format(group_col="s.coach", where=in_def + " AND s.coach IS NOT NULL")), {"k": k, "cur": cur_season}).mappings()}
+
+    def lean(k: int, r: Optional[dict]) -> dict:
+        L = league[k]
+        if not r or r["n"] < 8 or r["lose_big"] is None:
+            return {"edge": None, "strength": "thin", "market": None, "text": "too few games to say"}
+        edge = r["lose_big"] - L["lose_big"]
+        n = r["n"]
+        strength = "strong" if (abs(edge) >= 0.08 and n >= 25) else "lean" if (abs(edge) >= 0.05 and n >= 12) else "neutral" if n >= 12 else "thin"
+        if k == 1:
+            market = "opp -1.5" if edge > 0 else "team +1.5"
+            text_ = (f"loses by 2+ {r['lose_big']:.0%} vs league {L['lose_big']:.0%} when down 1 late")
+        else:
+            market = "avoid +2.5" if edge > 0 else "team +2.5"
+            text_ = (f"loses by 3+ {r['lose_big']:.0%} vs league {L['lose_big']:.0%} when down 2 late")
+        return {"edge": round(edge, 4), "strength": strength, "market": market if strength in ("strong", "lean") else None, "text": text_}
+
+    def behaviour(k: int, r: Optional[dict]) -> List[str]:
+        L = league[k]
+        if not r or r["n"] < 8:
+            return []
+        tags = []
+        if r["pull_rate"] is not None and L["pull_rate"] is not None:
+            if r["pull_rate"] - L["pull_rate"] <= -0.08: tags.append("rarely pulls" if k == 2 else "often stays in net")
+            elif r["pull_rate"] - L["pull_rate"] >= 0.08: tags.append("always pulls")
+        if r["median_s"] is not None and L["median_s"] is not None:
+            if r["median_s"] - L["median_s"] >= 15: tags.append("pulls early")
+            elif r["median_s"] - L["median_s"] <= -15: tags.append("pulls late")
+        if r["en"] is not None and L["en"] is not None and r["pull_rate"]:
+            if r["en"] - L["en"] >= 0.08: tags.append("bleeds empty-netters")
+            elif r["en"] - L["en"] <= -0.08: tags.append("few empty-netters")
+        return tags
+
+    def totals_lean(k: int, r: Optional[dict]) -> dict:
+        """Totals angle: with the game sitting one short of the number late, does this bench add a goal?"""
+        L = league[k]
+        if not r or r["n"] < 12 or r["late1"] is None:
+            return {"edge": None, "strength": "thin", "market": None, "text": "too few games to say"}
+        edge = r["late1"] - L["late1"]
+        strength = "strong" if (abs(edge) >= 0.08 and r["n"] >= 25) else "lean" if abs(edge) >= 0.05 else "neutral"
+        market = ("over" if edge > 0 else "under") if strength != "neutral" else None
+        return {"edge": round(edge, 4), "strength": strength, "market": market,
+                "text": f"a goal after 17:00 {r['late1']:.0%} vs league {L['late1']:.0%} when down {k} late (avg {r['late_goals']:.2f} vs {L['late_goals']:.2f})"}
+
+    out = []
+    for cc in current:
+        r1, r2 = per[1].get(cc["coach"]), per[2].get(cc["coach"])
+        l1, l2 = lean(1, r1), lean(2, r2)
+        score = max(abs(l1["edge"] or 0) * (1.0 if l1["strength"] in ("strong", "lean") else 0.3),
+                    abs(l2["edge"] or 0) * (1.0 if l2["strength"] in ("strong", "lean") else 0.3))
+        t1, t2 = totals_lean(1, r1), totals_lean(2, r2)
+        score = max(score, abs(t1["edge"] or 0) * (0.8 if t1["market"] else 0.2), abs(t2["edge"] or 0) * (0.8 if t2["market"] else 0.2))
+        out.append({"coach": cc["coach"], "team": cc["team"], "since": cc["start_date"].isoformat(), "games_with_team": cc["games"],
+                    "down1": r1, "down2": r2, "lean1": l1, "lean2": l2, "total1": t1, "total2": t2,
+                    "tags1": behaviour(1, r1), "tags2": behaviour(2, r2), "score": round(score, 4)})
+    out.sort(key=lambda x: -x["score"])
+    return {"season": cur_season, "league": league, "coaches": out,
+            "method": "A situation is a team-game where the team trailed by exactly 1 (2) at some point inside the last three minutes of regulation. "
+                      "Loses by 2+ (3+) is the share of those that ended, after OT or a shootout, with the team beaten by at least two (three) goals: "
+                      "the opponent's -1.5 cashes (the team's +2.5 fails). Pull rate, median time left and empty-net rate describe how the coach gets there. "
+                      "Late goals: goals added after 17:00 of the third by either side, overtime and the shootout goal included, which is what moves a 5.5 / 6 / 6.5 total. "
+                      "Leans need at least 12 situations and a 5-point gap to the league; strong needs 25 and 8 points."}

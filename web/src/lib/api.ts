@@ -85,3 +85,8 @@ export interface Pulls {
   coaches: { league: string; team: string; coach: string; start_date: string; end_date: string | null; games: number }[];
   ingest: { season: number; games: number; errors: number; pbp_only: number; last_date: string | null }[];
 }
+
+export interface NoteStat { n: number; n_this: number; pull_rate: number | null; median_s: number | null; en: number | null; scored: number | null; lose_big: number | null; lose_by_k: number | null; point: number | null; ot: number | null; late_goals: number | null; late1: number | null; late2: number | null }
+export interface NoteLean { edge: number | null; strength: "strong" | "lean" | "neutral" | "thin"; market: string | null; text: string }
+export interface CoachNote { coach: string; team: string; since: string; games_with_team: number; down1: NoteStat | null; down2: NoteStat | null; lean1: NoteLean; lean2: NoteLean; total1: NoteLean; total2: NoteLean; tags1: string[]; tags2: string[]; score: number }
+export interface PullNotes { season: number; league: Record<string, NoteStat>; coaches: CoachNote[]; method: string }
