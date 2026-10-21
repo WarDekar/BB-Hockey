@@ -29,11 +29,13 @@ function query(f: Filters): string {
 /** Timing histogram with the empty-net and scoring rate per bin drawn as lines on a second panel (one scale each, never shared). */
 function TimingChart({ bins, binS, median }: { bins: PullBin[]; binS: number; median: number | null }) {
   const W = 640, H = 170, L = 36, R = 12, T = 10, B = 24;
-  const xs = (s: number) => L + ((600 - s) / 600) * (W - L - R);   // time left runs right-to-left: 10:00 on the left, 0:00 on the right
+  const MAX = 300;                                                   // nearly every pull is inside 5:00; later bins are dropped from the drawing
+  bins = bins.filter((b) => b.bin_s < MAX);
+  const xs = (s: number) => L + ((MAX - s) / MAX) * (W - L - R);     // time left runs right-to-left: 5:00 on the left, 0:00 on the right
   const maxN = Math.max(1, ...bins.map((b) => b.pulls));
   const yN = (n: number) => T + (1 - n / maxN) * (H - T - B);
   const yR = (r: number) => T + (1 - r) * (H - T - B);
-  const ticks = [600, 480, 360, 240, 120, 0];
+  const ticks = [300, 240, 180, 120, 60, 0];
   const line = (key: "en_rate" | "scored_rate") => bins.filter((b) => b.pulls >= 5).map((b, i) => `${i ? "L" : "M"}${xs(b.bin_s + binS / 2).toFixed(1)},${yR(b[key]).toFixed(1)}`).join(" ");
   const axis = (label: string) => (
     <>
@@ -137,7 +139,7 @@ export default function Pulls() {
 
       <div className="min-h-0 flex-1 overflow-y-auto scrollbar-thin">
         <div className="flex flex-col gap-3">
-          <Panel title={`Timing and what it costs · down ${deficitWord}`} right={<span>{data?.bin_s ?? 30}-second bins · time left runs 10:00 → 0:00</span>}>
+          <Panel title={`Timing and what it costs · down ${deficitWord}`} right={<span>{data?.bin_s ?? 30}-second bins · time left runs 5:00 → 0:00</span>}>
             {data && data.bins.length ? <TimingChart bins={data.bins} binS={data.bin_s} median={L?.median_s ?? null} /> : <Empty>No pulls match these filters.</Empty>}
           </Panel>
 
