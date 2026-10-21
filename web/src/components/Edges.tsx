@@ -6,8 +6,8 @@ import { ChipGroup, Divider, LINE_OPTS, MultiSelect, PERIOD_OPTS, inputClass, li
 
 // Same composable bar as the Bets tab. Edges are pregame-only by construction
 // (the API drops started games), so the date group is just today / tomorrow / later.
-interface Filters { line: string; period: string; side: string; papered: string; books: string[] | null; day: string; team: string; min: number | null }
-const DEFAULT: Filters = { line: "all", period: "all", side: "all", papered: "all", books: null, day: "all", team: "", min: null };
+interface Filters { line: string; period: string; side: string; papered: string; books: string[] | null; day: string; team: string; min: number | null; source: string }
+const DEFAULT: Filters = { line: "all", period: "all", side: "all", papered: "all", books: null, day: "all", team: "", min: null, source: "all" };
 const KEY = "bbh_edges_filters_v1";
 const load = (): Filters => { try { return { ...DEFAULT, ...JSON.parse(localStorage.getItem(KEY) || "{}"), team: "" }; } catch { return DEFAULT; } };
 
@@ -17,6 +17,10 @@ const dayOf = (iso: string) => {
   return days <= 0 ? "today" : days === 1 ? "tomorrow" : "later";
 };
 const sideOf = (s: string) => (s === "over" || s === "under" ? s : s === "draw" ? "draw" : "team");
+/** Where the edge comes from: the benches (only above threshold after the coach adjustment), the market alone (above
+ *  threshold at the league baseline too), or the adjustment cuts against it (baseline EV higher than ours). */
+const sourceOf = (e: Edge, min: number) => (e.base_ev === null || e.base_ev === undefined ? "unknown" : e.base_ev >= min ? "market" : e.ev >= min ? "coach" : "none");
+const adjOf = (e: Edge) => (e.base_prob === null || e.base_prob === undefined ? null : e.fair_prob - e.base_prob);
 
 export default function Edges({ rows, minEdge, onOpen }: { rows: Edge[]; minEdge: number; onOpen: (id: number) => void }) {
   const [f, setF] = useState<Filters>(load);
@@ -39,6 +43,7 @@ export default function Edges({ rows, minEdge, onOpen }: { rows: Edge[]; minEdge
       && (f.period === "all" || periodOf(r.market) === f.period)
       && (f.side === "all" || sideOf(r.side) === f.side)
       && (f.papered === "all" || (f.papered === "papered") === r.papered)
+      && (f.source === "all" || (f.source === "against" ? (adjOf(r) ?? 0) < -0.005 : sourceOf(r, min) === f.source))
       && (!bookSet || bookSet.has(r.sportsbook))
       && (f.day === "all" || dayOf(r.game_time) === f.day)
       && teamMatch(team, r));
@@ -60,6 +65,8 @@ export default function Edges({ rows, minEdge, onOpen }: { rows: Edge[]; minEdge
         <Divider />
         <ChipGroup value={f.papered} onChange={(papered) => set({ papered })} options={[["papered", "Papered"], ["open", "Open"]]} />
         <Divider />
+        <ChipGroup value={f.source} onChange={(source) => set({ source })} options={[["coach", "Bench-driven"], ["market", "At baseline too"], ["against", "Adj. against"]]} />
+        <Divider />
         <MultiSelect options={books} value={f.books} onChange={(books) => set({ books })} />
         <Divider />
         <ChipGroup value={f.day} onChange={(day) => set({ day })} options={[["today", "Today"], ["tomorrow", "Tomorrow"], ["later", "Later"]]} />
@@ -75,7 +82,7 @@ export default function Edges({ rows, minEdge, onOpen }: { rows: Edge[]; minEdge
         {!shown.length ? <Empty>{rows.length ? `No quotes match these filters above ${pct(min)} EV.` : `No quotes above ${pct(min)} EV on pregame games right now.`}</Empty> : (
           <div className="min-h-0 flex-1 overflow-auto scrollbar-thin">
             <table className="w-full text-xs">
-              <thead className="sticky top-0 z-[1] bg-slate-900 shadow-[0_1px_0_0_var(--color-slate-800)]"><tr><Th>Game</Th><Th>Start</Th><Th>Market</Th><Th>Side</Th><Th>Book</Th><Th right>Price</Th><Th right>Fair</Th><Th right>Fair prob</Th><Th right>EV</Th><Th right>¼ Kelly</Th><Th right>Quoted</Th><Th></Th></tr></thead>
+              <thead className="sticky top-0 z-[1] bg-slate-900 shadow-[0_1px_0_0_var(--color-slate-800)]"><tr><Th>Game</Th><Th>Start</Th><Th>Market</Th><Th>Side</Th><Th>Book</Th><Th right>Price</Th><Th right>Fair</Th><Th right>Fair prob</Th><Th right>Base prob</Th><Th right>Bench adj</Th><Th right>EV</Th><Th right>Base EV</Th><Th right>¼ Kelly</Th><Th right>Quoted</Th><Th></Th></tr></thead>
               <tbody>
                 {shown.map((e) => (
                   <tr key={e.id} className="border-t border-slate-800/60 hover:bg-slate-800/40">
@@ -84,7 +91,11 @@ export default function Edges({ rows, minEdge, onOpen }: { rows: Edge[]; minEdge
                     <Td className="cursor-pointer text-slate-400 hover:text-slate-200" title="filter to this book" onClick={() => set({ books: [e.sportsbook] })}>{e.sportsbook}</Td>
                     <Td right mono>{fmtAmerican(e.price)}</Td><Td right mono className="text-slate-400">{fmtAmerican(e.fair_price)}</Td>
                     <Td right mono title={e.push_prob ? `push ${pct(e.push_prob)}` : undefined}>{pct(e.fair_prob)}</Td>
-                    <Td right mono className={evClass(e.ev)}>{signedPct(e.ev)}</Td><Td right mono className="text-slate-400">{pct(e.kelly * 0.25)}</Td>
+                    <Td right mono className="text-slate-400" title="league-average benches, same ML and total">{e.base_prob === null || e.base_prob === undefined ? "—" : pct(e.base_prob)}</Td>
+                    <Td right mono className={(adjOf(e) ?? 0) > 0.005 ? "text-ice" : (adjOf(e) ?? 0) < -0.005 ? "text-amber-300" : "text-slate-500"} title="fair prob minus baseline: what the two benches add">{adjOf(e) === null ? "—" : signedPct(adjOf(e))}</Td>
+                    <Td right mono className={evClass(e.ev)}>{signedPct(e.ev)}</Td>
+                    <Td right mono className={e.base_ev === null || e.base_ev === undefined ? "text-slate-600" : e.base_ev >= min ? "text-emerald-400/70" : "text-slate-500"}>{e.base_ev === null || e.base_ev === undefined ? "—" : signedPct(e.base_ev)}</Td>
+                    <Td right mono className="text-slate-400">{pct(e.kelly * 0.25)}</Td>
                     <Td right className="text-slate-500">{ago(e.quoted_at)}</Td><Td>{e.papered && <Pill tone="blue">papered</Pill>}</Td>
                   </tr>
                 ))}

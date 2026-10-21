@@ -14,7 +14,7 @@ from ..db import hockey_engine, odds_engine
 from ..edges import best_per_side, evaluate_quotes
 from ..model.goals import MARKETS, ModelParams
 from ..model.odds_math import ev_per_unit, fair_price_no_push, kelly_fraction
-from ..pricer import latest_snapshot, load_params, model_from_snapshot, save_params
+from ..pricer import baseline_from_snapshot, latest_snapshot, load_params, model_from_snapshot, save_params
 from ..teams import nhl_abbr
 from ..worker import pbp_pass, pricing_pass, settlement_pass
 
@@ -91,7 +91,7 @@ def game_detail(game_id: int) -> dict:
             quotes = odds_reader.book_quotes(odds_engine(), [game_id])
         except Exception:  # noqa: BLE001
             quotes = []
-        quotes_eval = evaluate_quotes(model, quotes)
+        quotes_eval = evaluate_quotes(model, quotes, baseline_from_snapshot(snap))
         best = {f"{k[0]}|{k[1]}|{k[2]}": v for k, v in best_per_side(quotes_eval).items()}
     edges = _rows("SELECT * FROM edges WHERE game_id = :g ORDER BY ev DESC", g=game_id)
     bets = _rows("SELECT * FROM paper_bets WHERE game_id = :g ORDER BY placed_at DESC", g=game_id)

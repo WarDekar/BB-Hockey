@@ -26,6 +26,17 @@ function BenchRead({ b, team, opp }: { b: Bench | null; team: string; opp: strin
   );
 }
 
+/** "base → adj" for the favourite's −1.5 (key m15) or the underdog's +2.5 (key p25). */
+function puckCell(s: SlateRow["summary"], i: SlateRow["inputs"], kind: "m15" | "p25") {
+  if (!s?.puck || !s.baseline?.puck || !i) return "—";
+  const fav = i.p_home >= 0.5 ? "home" : "away", dog = fav === "home" ? "away" : "home";
+  const key = kind === "m15" ? `${fav}_m15` : `${dog}_p25`;
+  const adj = s.puck[key], base = s.baseline.puck[key];
+  if (adj === undefined || base === undefined) return "—";
+  const d = adj - base;
+  return <span><span className="text-slate-500">{pct(base)}</span> → <span className={d > 0.005 ? "text-ice" : d < -0.005 ? "text-amber-300" : "text-slate-200"}>{pct(adj)}</span></span>;
+}
+
 const probToAmerican = (p: number | null | undefined) => (p === null || p === undefined ? null : p >= 0.5 ? (-100 * p) / (1 - p) : (100 * (1 - p)) / p);
 
 export default function Board({ rows, onOpen }: { rows: SlateRow[]; onOpen: (id: number) => void }) {
@@ -45,7 +56,7 @@ export default function Board({ rows, onOpen }: { rows: SlateRow[]; onOpen: (id:
                 <tr>
                   <Th>Time</Th><Th>Matchup</Th><Th>Status</Th>
                   <Th right>Fair ML</Th><Th right>Total</Th><Th right>λ home / away</Th>
-                  <Th right>Draw (60′)</Th><Th right>P1 o1.5</Th>
+                  <Th right>Fav −1.5 base → adj</Th><Th right>Dog +2.5 base → adj</Th><Th right>Draw (60′)</Th>
                   <Th>Bench reads</Th>
                   <Th right>Edges</Th><Th right>Bets</Th><Th right>P&L</Th><Th right>Priced</Th>
                 </tr>
@@ -62,8 +73,9 @@ export default function Board({ rows, onOpen }: { rows: SlateRow[]; onOpen: (id:
                       <Td right mono title={i ? `consensus home ${pct(i.p_home)} · ${i.consensus_at ?? ""}` : undefined}>{i ? `${fmtAmerican(probToAmerican(i.p_home))} / ${fmtAmerican(probToAmerican(1 - i.p_home))}` : "—"}</Td>
                       <Td right mono title={i ? `over ${pct(i.p_over)}${i.total_assumed ? " (assumed)" : ""}` : undefined}>{i ? `${i.total_point}${i.total_assumed ? "*" : ""}` : "—"}</Td>
                       <Td right mono className="text-slate-400">{s ? `${num(s.lambda_home)} / ${num(s.lambda_away)}` : "—"}</Td>
+                      <Td right mono title="fair cover probability for the favourite −1.5: league-average benches → these benches">{puckCell(s, i, "m15")}</Td>
+                      <Td right mono title="fair cover probability for the underdog +2.5: league-average benches → these benches">{puckCell(s, i, "p25")}</Td>
                       <Td right mono>{s ? pct(s.p_draw) : "—"}</Td>
-                      <Td right mono>{s?.market_check?.p1_total_over ? pct(s.market_check.p1_total_over.model) : "—"}</Td>
                       <Td className="text-[11px] leading-4">
                         <div className="flex flex-col"><BenchRead b={g.away_bench} team={g.away_abbr ?? "AWAY"} opp={g.home_abbr ?? "HOME"} /><BenchRead b={g.home_bench} team={g.home_abbr ?? "HOME"} opp={g.away_abbr ?? "AWAY"} /></div>
                       </Td>

@@ -56,17 +56,17 @@ def pricing_pass(odds: Engine, hockey: Engine, params: Optional[ModelParams] = N
             r = price_game(c, g, cons[g["id"]], params, eng)
             if r is None:
                 continue
-            sid, model, inputs, is_fresh = r
+            sid, model, inputs, is_fresh, base = r
             priced += 1; fresh += int(is_fresh)
-            rows = evaluate_quotes(model, quotes_by_game.get(g["id"], []))
+            rows = evaluate_quotes(model, quotes_by_game.get(g["id"], []), base)
             pos = positive_edges(rows, min_ev=0.0)
             c.execute(text("DELETE FROM edges WHERE game_id = :g"), {"g": g["id"]})
             if pos:
                 c.execute(text("""
                     INSERT INTO edges (snapshot_id, game_id, market, side, point, period_src, sportsbook_id, sportsbook,
-                                       book_group, price, quoted_at, fair_prob, push_prob, fair_price, ev, kelly)
+                                       book_group, price, quoted_at, fair_prob, push_prob, fair_price, ev, kelly, base_prob, base_ev)
                     VALUES (:sid, :game_id, :market, :side, :point, :period_src, :sportsbook_id, :sportsbook,
-                            :book_group, :price, :quoted_at, :fair_prob, :push_prob, :fair_price, :ev, :kelly)
+                            :book_group, :price, :quoted_at, :fair_prob, :push_prob, :fair_price, :ev, :kelly, :base_prob, :base_ev)
                 """), [dict(r, sid=sid) for r in pos])
             n_edges += sum(1 for r in pos if r["ev"] >= settings.min_edge)
             top.extend(dict(r, home=g["home_name"], away=g["away_name"]) for r in pos[:3] if r["ev"] >= settings.min_edge)

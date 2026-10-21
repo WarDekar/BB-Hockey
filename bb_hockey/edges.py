@@ -35,8 +35,9 @@ def _sides(market_type: str, q: dict):
     return [("home", None, q.get("home_price")), ("away", None, q.get("away_price"))]
 
 
-def evaluate_quotes(model: GameModel, quotes: List[dict]) -> List[dict]:
-    """One row per quoted side with fair prob/push, fair price, EV and Kelly."""
+def evaluate_quotes(model: GameModel, quotes: List[dict], base: Optional[GameModel] = None) -> List[dict]:
+    """One row per quoted side with fair prob/push, fair price, EV and Kelly; with ``base`` (the league-average
+    model from the same ML + total) also the baseline prob / EV so the bench adjustment is visible per quote."""
     out = []
     for q in quotes:
         mk = market_key(q["market_type"], q["period"])
@@ -52,8 +53,16 @@ def evaluate_quotes(model: GameModel, quotes: List[dict]) -> List[dict]:
             ev = ev_per_unit(p_win, p_push, price)
             if ev is None:
                 continue
+            base_prob = base_ev = None
+            if base is not None:
+                rb = base.prob_for(mk, side, point)
+                if rb:
+                    base_prob = round(rb[0], 5)
+                    bev = ev_per_unit(rb[0], rb[1], price)
+                    base_ev = round(bev, 5) if bev is not None else None
             out.append({
                 "game_id": q["game_id"], "market": mk, "side": side, "point": point,
+                "base_prob": base_prob, "base_ev": base_ev,
                 "period_src": q["period"], "sportsbook_id": q["sportsbook_id"], "sportsbook": q["book"],
                 "book_group": q.get("book_group"), "price": float(price), "quoted_at": q.get("timestamp"),
                 "fair_prob": round(p_win, 5), "push_prob": round(p_push, 5),

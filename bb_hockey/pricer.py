@@ -73,14 +73,53 @@ def build_inputs(cons: Dict[tuple, dict], params: ModelParams, method: Optional[
     return out
 
 
-def fit_from_inputs(inputs: dict, params: ModelParams) -> Tuple[GameModel, dict]:
+PUCK_LINES = (("home", -1.5), ("away", 1.5), ("away", -1.5), ("home", 1.5), ("home", -2.5), ("away", 2.5), ("away", -2.5), ("home", 2.5))
+
+
+def puck_summary(model: GameModel) -> dict:
+    """Fair cover probabilities (pushes conditioned out) for the standard and alternate puck lines: home_m15, away_p25..."""
+    out = {}
+    for side, pt in PUCK_LINES:
+        r = model.prob_for("puck", side, pt)
+        if r:
+            key = f"{side}_{'m' if pt < 0 else 'p'}{int(abs(pt) * 10)}"
+            out[key] = round(r[0] / (r[0] + max(0.0, 1 - r[0] - r[1])), 5)
+    return out
+
+
+def league_eng(inputs: dict, params: ModelParams) -> dict:
+    """The league-average empty-net rates: what the ML + total alone imply with no bench information."""
+    lg = (inputs.get("eng") or {}).get("league") or {}
+    L1, L2 = lg.get("lead1", params.eng_rate), lg.get("lead2", params.eng_rate2)
+    return {"home_lead1": L1, "away_lead1": L1, "home_lead2": L2, "away_lead2": L2}
+
+
+def fit_baseline(inputs: dict, params: ModelParams) -> GameModel:
+    eng = league_eng(inputs, params)
+    lh, la, _ = fit_lambdas(inputs["p_home"], inputs["total_point"], inputs["p_over"], params, eng)
+    return GameModel(lh, la, params, eng)
+
+
+def fit_from_inputs(inputs: dict, params: ModelParams, return_base: bool = False):
+    """Coach-adjusted model plus, in the summary, the league-baseline puck lines the same inputs imply."""
     eng = (inputs.get("eng") or {}).get("rates")
     lh, la, diag = fit_lambdas(inputs["p_home"], inputs["total_point"], inputs["p_over"], params, eng)
     model = GameModel(lh, la, params, eng)
     summary = model.summary()
     summary.update(diag)
     summary["market_check"] = market_check(model, inputs)
-    return model, summary
+    summary["puck"] = puck_summary(model)
+    base = fit_baseline(inputs, params)
+    summary["baseline"] = {"lambda_home": round(base.lh, 4), "lambda_away": round(base.la, 4), "eng": {k: round(v, 4) for k, v in base.eng.items()},
+                           "p_draw": round(base.p_draw, 5), "puck": puck_summary(base)}
+    return (model, summary, base) if return_base else (model, summary)
+
+
+def baseline_from_snapshot(snapshot: dict) -> Optional[GameModel]:
+    b = (snapshot.get("summary") or {}).get("baseline")
+    if not b:
+        return None
+    return GameModel(b["lambda_home"], b["lambda_away"], ModelParams.from_dict(snapshot.get("params")), b.get("eng"))
 
 
 def market_check(model: GameModel, inputs: dict) -> dict:
@@ -138,7 +177,7 @@ def upsert_game(c: Connection, g: dict) -> None:
 
 
 def latest_snapshot(c: Connection, game_id: int, kind: Optional[str] = None) -> Optional[dict]:
-    q = "SELECT id, game_id, computed_at, kind, inputs, params, summary, board FROM pricing_snapshots WHERE game_id = :g"
+    q = "SELECT id, game_id, computed_at, kind, inputs, params, summary, board, board_base FROM pricing_snapshots WHERE game_id = :g"
     if kind:
         q += " AND kind = :k"
     q += " ORDER BY computed_at DESC LIMIT 1"
@@ -157,16 +196,16 @@ def _inputs_moved(prev: Optional[dict], new: dict) -> bool:
 
 
 def write_snapshot(c: Connection, game_id: int, kind: str, inputs: dict, params: ModelParams,
-                   summary: dict, board: list) -> int:
+                   summary: dict, board: list, board_base: Optional[list] = None) -> int:
     row = c.execute(text("""
-        INSERT INTO pricing_snapshots (game_id, kind, inputs, params, summary, board)
-        VALUES (:g, :k, CAST(:i AS jsonb), CAST(:p AS jsonb), CAST(:s AS jsonb), CAST(:b AS jsonb)) RETURNING id
+        INSERT INTO pricing_snapshots (game_id, kind, inputs, params, summary, board, board_base)
+        VALUES (:g, :k, CAST(:i AS jsonb), CAST(:p AS jsonb), CAST(:s AS jsonb), CAST(:b AS jsonb), CAST(:bb AS jsonb)) RETURNING id
     """), {"g": game_id, "k": kind, "i": json.dumps(inputs, default=str), "p": json.dumps(params.to_dict()),
-           "s": json.dumps(summary), "b": json.dumps(board)}).first()
+           "s": json.dumps(summary), "b": json.dumps(board), "bb": json.dumps(board_base) if board_base is not None else None}).first()
     return int(row[0])
 
 
-def price_game(c: Connection, game: dict, cons: Dict[tuple, dict], params: ModelParams, eng: Optional[dict] = None) -> Optional[Tuple[int, GameModel, dict, bool]]:
+def price_game(c: Connection, game: dict, cons: Dict[tuple, dict], params: ModelParams, eng: Optional[dict] = None) -> Optional[Tuple[int, GameModel, dict, bool, Optional[GameModel]]]:
     """Fit and (maybe) snapshot one game. Returns (snapshot_id, model, inputs, fresh)."""
     inputs = build_inputs(cons, params, eng=eng)
     if inputs is None:
@@ -174,8 +213,8 @@ def price_game(c: Connection, game: dict, cons: Dict[tuple, dict], params: Model
     prev = latest_snapshot(c, game["id"], kind="live")
     now = datetime.now(timezone.utc)
     if prev and not _inputs_moved(prev, inputs) and prev["params"] == params.to_dict() \
-            and now - prev["computed_at"] < SNAPSHOT_MIN_GAP:
-        return int(prev["id"]), model_from_snapshot(prev), prev["inputs"], False
-    model, summary = fit_from_inputs(inputs, params)
-    sid = write_snapshot(c, game["id"], "live", inputs, params, summary, model.board())
-    return sid, model, inputs, True
+            and now - prev["computed_at"] < SNAPSHOT_MIN_GAP and (prev.get("summary") or {}).get("baseline"):
+        return int(prev["id"]), model_from_snapshot(prev), prev["inputs"], False, baseline_from_snapshot(prev)
+    model, summary, base = fit_from_inputs(inputs, params, return_base=True)
+    sid = write_snapshot(c, game["id"], "live", inputs, params, summary, model.board(), base.board())
+    return sid, model, inputs, True, base
