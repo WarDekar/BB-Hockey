@@ -72,6 +72,18 @@ goalie-off gap inside the last ten minutes of regulation (inside 6:00, or at
 least 20 s long); the pull rules live in `derive_pulls`. NHL abbreviations
 (LAK, NJD, SJS, TBL, UTA) differ from the ESPN ones in `teams.py`.
 
+## Edges board (2026-10-20)
+
+`edges` holds **every** evaluated quote of the latest pass per game (EV
+down to `store_min_ev` −1.0, capped at `max_edge`), not just positive ones:
+the Edges tab fetches `/edges?min_ev=-1` and its min-EV box (can go
+negative) filters, so the books dropdown lists the whole board. Pregame
+quotes count for `quote_max_age_min` = 720 minutes: `current.odds` is each
+book's standing line and Pinnacle/DK/Bet365 go hours without a change, so a
+30-minute window (the original) silently dropped most of the board. Games
+the worker cannot price in a pass lose their edges, and `/edges` only
+returns rows from the last 20 minutes, so nothing survives a model change.
+
 ## Hard rules
 
 - **Edits stay inside this repo.** Read sibling repos freely; never write to them.
