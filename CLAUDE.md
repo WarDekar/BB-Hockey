@@ -113,15 +113,23 @@ least 20 s long); the pull rules live in `derive_pulls`. NHL abbreviations
    `eng_prior_games` = 40, via `pbp.eng_for_game`; the rates ride in the
    snapshot `inputs.eng` so re-pricing, the closing model and CLV agree.
    `coach_eng = 0` in Params falls back to the two league rates. Also measured:
-   `eng_chain` 0.18 (a second empty-netter after the first), `eng_rate3` 0.14
-   (three-goal leads → four), and `strength_sigma` 0.35 (pregame strength
-   uncertainty mixed into the rate ratio; widens margins, not totals). All
-   validated on 1,743 historical finals with closing lines (SBR archive,
-   2021-22 + Oct–Nov 2022): fav −1.5 41.3% model vs 41.4% real (market
-   40.4%), −2.5 28.9 vs 29.0, dog +2.5 71.1 vs 71.0. Residuals: −3.5 two
-   points generous; totals under-produce odd numbers (7: 18.4% vs 21.1%);
-   at ≥68% favourites the dog +2.5 is 5 points better than modelled. See
-   `docs/model/2026-10-20-baseline-validation.md`.
+   `eng_chain` 0.18 (a second empty-netter after the first) and `eng_rate3`
+   0.14 (three-goal leads → four). Validated on 1,743 historical finals with
+   closing lines (SBR archive, 2021-22 + Oct–Nov 2022): fav −1.5 39.9% model
+   vs 41.4% real (market 40.4%), −2.5 26.9 vs 29.0, dog +2.5 73.1 vs 71.0,
+   dog by 2+ 22.6 vs 19.4, any 2+ margin 62.5 vs 60.8. Favourites won 63.7%
+   in that sample against 61.1% priced, which explains most of the residual
+   on both sides, so the shape is kept symmetric. A strength mixture
+   (`strength_sigma`) was tried and rejected: it matched the favourite side
+   by overstating underdog blowouts (any 2+ margin 64.9%). Remaining known
+   residuals: totals under-produce odd numbers (7: 18.4% vs 21.1%, exact 6
+   overstated by ~1.5 points); at ≥68% favourites the dog +2.5 is better than
+   modelled. See `docs/model/2026-10-20-baseline-validation.md`.
+   **Exchange quotes are mids.** BB-Odds stores Polymarket (ids 700/761) and
+   Kalshi (760) at the bid/ask midpoint (the ±1.5 pair shows identical
+   prices), which BB-Odds's own notes call phantom +EV; `edges.py` applies a
+   per-book taker haircut (`exchange_haircut`) before EV, and the UI shows the
+   price as quoted with the haircut noted.
 7. **Every live snapshot carries a league-baseline board** (`board_base`,
    `summary.baseline`): the same ML + total with league-average empty-net
    rates. Edges carry `base_prob` / `base_ev`; the Edges tab's source chips

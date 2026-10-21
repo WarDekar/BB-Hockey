@@ -22,6 +22,7 @@ from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
 from .config import settings
+from .model.odds_math import american_to_prob, prob_to_american
 
 PERIOD_MAP = {"game": "game", "1q": "p1", "1h": "p1", "2h": "p2"}
 
@@ -93,7 +94,7 @@ def book_quotes(engine: Engine, game_ids: Iterable[int], max_age_min: Optional[i
     max_age_min = max_age_min or settings.quote_max_age_min
     with engine.connect() as c:
         rows = c.execute(text("""
-            SELECT m.game_id, m.market_type, m.period, o.sportsbook_id, s.key AS book_key, s.name AS book,
+            SELECT m.id AS market_id, m.game_id, m.market_type, m.period, o.sportsbook_id, s.key AS book_key, s.name AS book,
                    s.book_group, s.consensus_enabled, o.home_price, o.away_price, o.home_point, o.away_point, o.timestamp
             FROM current.odds o
             JOIN current.markets m ON m.id = o.market_id
@@ -104,7 +105,50 @@ def book_quotes(engine: Engine, game_ids: Iterable[int], max_age_min: Optional[i
               AND COALESCE(s.uses_live_markets_only, false) = false
               AND o.timestamp >= :since
         """), {"ids": ids, "since": datetime.now(timezone.utc) - timedelta(minutes=max_age_min)}).mappings().all()
-    return [dict(r) for r in rows]
+    out = [dict(r) for r in rows]
+    return _takeable(out, poly_asks(engine, ids))
+
+
+def poly_asks(engine: Engine, game_ids: Iterable[int]) -> Dict[int, dict]:
+    """Polymarket asks (what a taker pays) keyed by BB-Odds market id, from BB-Poly's market table."""
+    ids = _ids(game_ids)
+    if not ids:
+        return {}
+    try:
+        with engine.connect() as c:
+            rows = c.execute(text("""
+                SELECT pm.bb_odds_market_id AS market_id, pm.home_american_ask, pm.away_american_ask, pm.updated_at
+                FROM bb_poly.poly_markets pm JOIN current.markets m ON m.id = pm.bb_odds_market_id
+                WHERE m.game_id = ANY(:ids) AND NOT pm.closed AND pm.home_american_ask IS NOT NULL AND pm.away_american_ask IS NOT NULL
+            """), {"ids": ids}).mappings().all()
+    except Exception as e:  # noqa: BLE001
+        logger.warning("poly asks unavailable: %s", e)
+        return {}
+    return {int(r["market_id"]): dict(r) for r in rows}
+
+
+def _worsen(price: Optional[float], haircut: float) -> Optional[float]:
+    """Move an American price against the bettor by ``haircut`` probability points."""
+    if price is None:
+        return None
+    p = american_to_prob(float(price))
+    p2 = min(0.99, p + haircut)
+    return prob_to_american(p2)
+
+
+def _takeable(quotes: List[dict], asks: Dict[int, dict]) -> List[dict]:
+    """Exchange rows in BB-Odds are mids: replace with the ask when BB-Poly has it, else a haircut. Keeps the quote."""
+    for q in quotes:
+        q["price_basis"] = "book"
+        if q.get("book") not in settings.exchange_mid_books:
+            continue
+        q["home_price_quoted"], q["away_price_quoted"] = q.get("home_price"), q.get("away_price")
+        a = asks.get(int(q["market_id"])) if q.get("market_id") is not None and q.get("book") == "Polymarket" else None
+        if a:
+            q["home_price"], q["away_price"], q["price_basis"] = float(a["home_american_ask"]), float(a["away_american_ask"]), "ask"
+        else:
+            q["home_price"], q["away_price"], q["price_basis"] = _worsen(q.get("home_price"), settings.exchange_haircut_prob), _worsen(q.get("away_price"), settings.exchange_haircut_prob), "mid-haircut"
+    return quotes
 
 
 def closing_consensus(engine: Engine, game_id: int, game_time: datetime, book_id: int = 413) -> Dict[tuple, dict]:

@@ -89,7 +89,7 @@ export default function Edges({ rows, minEdge, onOpen }: { rows: Edge[]; minEdge
                     <Td className="cursor-pointer font-medium text-slate-100" onClick={() => onOpen(e.game_id)}>{matchup(e)}</Td><Td mono className="text-slate-400">{fmtClock(e.game_time)}</Td>
                     <Td>{marketLabel(e.market)}</Td><Td>{sideLabel(e.side, e.point, e.home_abbr, e.away_abbr)}</Td>
                     <Td className="cursor-pointer text-slate-400 hover:text-slate-200" title="filter to this book" onClick={() => set({ books: [e.sportsbook] })}>{e.sportsbook}</Td>
-                    <Td right mono>{fmtAmerican(e.price)}</Td><Td right mono className="text-slate-400">{fmtAmerican(e.fair_price)}</Td>
+                    <Td right mono title={e.price_basis && e.price_basis !== "book" ? `${e.price_basis === "ask" ? "Polymarket ask" : "exchange mid less a haircut"} · quoted mid ${fmtAmerican(e.price_quoted)}` : undefined}>{fmtAmerican(e.price)}{e.price_basis && e.price_basis !== "book" ? <span className="text-slate-500">{e.price_basis === "ask" ? " ask" : " ~"}</span> : null}</Td><Td right mono className="text-slate-400">{fmtAmerican(e.fair_price)}</Td>
                     <Td right mono title={e.push_prob ? `push ${pct(e.push_prob)}` : undefined}>{pct(e.fair_prob)}</Td>
                     <Td right mono className="text-slate-400" title="league-average benches, same ML and total">{e.base_prob === null || e.base_prob === undefined ? "—" : pct(e.base_prob)}</Td>
                     <Td right mono className={(adjOf(e) ?? 0) > 0.005 ? "text-ice" : (adjOf(e) ?? 0) < -0.005 ? "text-amber-300" : "text-slate-500"} title="fair prob minus baseline: what the two benches add">{adjOf(e) === null ? "—" : signedPct(adjOf(e))}</Td>

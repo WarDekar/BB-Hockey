@@ -15,16 +15,32 @@ the alternates cost? The answer is the **baseline** every snapshot now carries
 
 | Market | Realised | Old prior (ENG 0.28, no 2→3) | Final model | Market close |
 |---|---:|---:|---:|---:|
-| Favourite −1.5 | 41.4% | 37.8% | **41.3%** | 40.4% |
-| Favourite −2.5 | 29.0% | 20.7% | **28.9%** | — |
-| Favourite −3.5 | 12.4% | 11.4% | 14.6% | — |
-| Underdog +2.5 | 71.0% | 79.3% | **71.1%** | — |
-| Regulation tie | 21.5% | 21.6% | 20.5% | — |
+| Favourite −1.5 | 41.4% | 37.8% | **39.9%** | 40.4% |
+| Favourite −2.5 | 29.0% | 20.7% | **26.9%** | — |
+| Favourite −3.5 | 12.4% | 11.4% | 12.3% | — |
+| Underdog +2.5 | 71.0% | 79.3% | **73.1%** | — |
+| Underdog wins by 2+ | 19.4% | — | 22.6% | — |
+| Any margin of 2+ | 60.8% | — | 62.5% | — |
+| Regulation tie | 21.5% | 21.6% | 21.6% | — |
 | Mean total | 6.30 | 6.21 | 6.21 | — |
 
 The old prior under-priced the favourite −1.5 by 3.6 points and the −2.5 by 8
 points, and over-priced the underdog +2.5 by 8 points. That is the whole
 alternate-line market.
+
+**Why the favourite side still reads 1.5 points short and the underdog side
+3 points long.** Favourites won 63.7% of these games against 61.1% priced
+(2.3 standard errors), so every "favourite by" rate is lifted and every
+"underdog by" rate is depressed relative to what the closing line implied.
+Conditional on who won, the model's shape is right for favourites (65.3%
+of favourite wins were by two or more, modelled 65.3%) and about 4 points
+wide for underdogs (53.4% realised, 58.1% modelled). A symmetric strength
+mixture (`strength_sigma` 0.35) was tried: it matched the favourite side
+by widening both, pushing any-2+ to 64.9% against 60.8% real, and was
+rejected. A leader-strength multiplier on the empty-net rate was also
+tried in several forms; all over-shot heavy favourites, which cover −1.5
+*less* (49%) than any form predicts. The shape stays symmetric and the
+residual is logged, not fitted.
 
 ## What changed in the model
 
@@ -36,47 +52,46 @@ alternate-line market.
    again. Moves margin-2 mass to margin 3; this is why real NHL games end by
    three more often (23%) than by two (20%).
 4. **Three-goal leads → four** (new), **0.14**.
-5. **Strength uncertainty** (new), σ = **0.35** on the log rate-ratio, a
-   five-point Gauss-Hermite mixture. Widens margins without touching the
-   total. Without it the model's margins spread with the price more steeply
-   than reality's.
-6. Per game, 1 and 2 use the trailing side's coach's own conversion, shrunk
+5. Per game, 1 and 2 use the trailing side's coach's own conversion, shrunk
    toward the league with a 40-situation weight.
 
 ## By price band (favourite's devigged ML probability)
 
-| Band | n | Fav won (real / ML) | Fav −1.5 real / model / market | Dog +2.5 real / model |
+| Band | n | Fav won (real / ML) | Fav by 2+ real / model / market | Dog by 2+ real / model |
 |---|---:|---|---|---|
-| 0.50–0.56 | 548 | 55.8% / 53.1% | 36.3% / 34.1% / 35.4% | 75.2% / 77.4% |
-| 0.56–0.62 | 501 | 60.9% / 59.1% | 38.7% / 39.2% / 36.7% | 72.7% / 73.1% |
-| 0.62–0.68 | 354 | 72.6% / 64.8% | 45.2% / 44.4% / 42.3% | 67.8% / 68.5% |
-| 0.68–0.80 | 324 | 71.9% / 72.4% | 49.4% / 52.2% / 51.2% | 66.0% / 61.1% |
+| 0.50–0.56 | 548 | 55.8% / 53.1% | 36.3% / 32.8% / 35.4% | 24.5% / 28.1% |
+| 0.56–0.62 | 501 | 60.9% / 59.1% | 38.7% / 37.8% / 36.7% | 21.6% / 23.7% |
+| 0.62–0.68 | 354 | 72.6% / 64.8% | 45.2% / 43.0% / 42.3% | 12.1% / 19.9% |
+| 0.68–0.80 | 324 | 71.9% / 72.4% | 49.4% / 50.7% / 51.2% | 15.4% / 15.2% |
 
 Standard error per band is 2–3 points, and the 0.62–0.68 band's favourites won
 8 points more often than their price in this sample, which lifts every realised
-cover rate there. Read the bands as direction, not as fitted numbers.
+cover rate there and halves the underdog's. Read the bands as direction.
 
 ## Residuals worth knowing when targeting
 
-- **Heavy favourites (≥ 68%)**: the model is 3 points generous to the
-  favourite −1.5 and 5 points harsh on the dog +2.5. Until more seasons say
-  otherwise, treat a model edge on a big favourite's −1.5 / −2.5 with
-  suspicion and a dog +2.5 as better than modelled.
-- **Near coin-flips (≤ 56%)**: the model is 2 points short on the −1.5. The
-  market is also short (35.4% vs 36.3% real), so the edge is smaller than it
-  looks but points the same way.
-- **−3.5**: 2 points generous after the mixture; `eng_rate3` or σ could come
-  down a notch when more data arrives.
+- **Near coin-flips (≤ 56%)**: any-2+ margin is right (60.9% modelled, 60.8%
+  real) but split 33/28 by the model against 36/24 real, i.e. the side the
+  market calls the favourite blows out more than the model says and the dog
+  less. If that is favourite-longshot bias in the moneyline rather than
+  noise, the fix belongs in the ML input, not the margin shape.
+- **Heavy favourites (≥ 68%)**: the model is 1 point generous on the −1.5
+  and 2 points harsh on the dog +2.5; treat big-favourite puck-line edges
+  with suspicion.
 - **Totals shape**: the quoted-total probability is fitted, so it is right by
-  construction, but the distribution under it is not: real totals spike on
-  odd numbers (5: 22.0%, 7: 21.1%) and dip on 6 (10.7%); the model gives 20.7 /
-  18.4 / 11.9. So alternate totals around a 6 (the 5.5 and 6.5, and the push
-  at 6) are mispriced by roughly a point each. The fix is a late-game goal
-  kernel from the play-by-play (`pull_situations.late_goals`), which we have:
-  goals added after 17:00 by state, rather than a Poisson tail. Next step.
-- **Regulation ties** dropped a point with the mixture (20.5% vs 21.5%);
-  `draw_inflation` 1.45 → ~1.52 would restore it, to be confirmed on the
-  Calibration tab's 3-way family rather than tuned blind.
+  construction, but the distribution under it is not: in the 629 games lined
+  at 6.0, exactly six goals happened 9.4% of the time against 12.0% modelled,
+  so under 6.5 and over 5.5 are each about 1.3 points rich in the model when
+  the line is 6. The fix is a late-game goal kernel from the play-by-play
+  (`pull_situations.late_goals`): goals added after 17:00 by state, rather
+  than a Poisson tail. Next step.
+- **Exchange quotes**: BB-Odds stores Polymarket and Kalshi at the bid/ask
+  mid. The pricer now reads the Polymarket ask from BB-Poly (about 0.6
+  points inside the mid on spreads and moneylines, 2.8 on totals) and
+  applies a 2.5-point haircut to Kalshi; the Edges tab shows which basis
+  a price is on. Before this, a +257 mid on a −1.5 read as +14% EV against
+  a fair of +212; at the ask against the corrected fair of +226 it is about
+  +7%, and at Pinnacle's +233 about +2%.
 
 ## How to target with this
 

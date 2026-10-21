@@ -110,6 +110,7 @@ def edges(min_ev: Optional[float] = None, limit: int = 300) -> List[dict]:
                        AND b.point IS NOT DISTINCT FROM e.point AND b.status <> 'void') AS papered
         FROM edges e JOIN games g ON g.id = e.game_id
         WHERE e.ev >= :min_ev AND g.status = 'pregame' AND g.game_time > now()
+          AND e.computed_at > now() - interval '20 minutes'   -- only edges from a pass the current model made
         ORDER BY e.ev DESC LIMIT :lim
     """, min_ev=min_ev, lim=limit)
 

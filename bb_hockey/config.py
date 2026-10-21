@@ -31,6 +31,10 @@ class Settings(BaseSettings):
     unit: float = 100.0
     max_stake_units: float = 1.0
     min_books_for_market: int = 1
+    # Exchanges whose BB-Odds row is a bid/ask midpoint, not a takeable price. Polymarket asks are read from
+    # bb_poly.poly_markets when present; otherwise (and for Kalshi) the mid is worsened by this many probability points.
+    exchange_mid_books: tuple = ("Polymarket", "Kalshi")
+    exchange_haircut_prob: float = 0.025
 
     devig_method: str = "shin"
 

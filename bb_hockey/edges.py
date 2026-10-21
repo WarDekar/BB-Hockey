@@ -27,12 +27,13 @@ def market_key(market_type: str, period: str) -> Optional[str]:
 
 
 def _sides(market_type: str, q: dict):
+    hq, aq = q.get("home_price_quoted", q.get("home_price")), q.get("away_price_quoted", q.get("away_price"))
     if market_type == "totals":
         pt = q.get("home_point")
-        return [("over", pt, q.get("home_price")), ("under", pt, q.get("away_price"))]
+        return [("over", pt, q.get("home_price"), hq), ("under", pt, q.get("away_price"), aq)]
     if market_type == "spreads":
-        return [("home", q.get("home_point"), q.get("home_price")), ("away", q.get("away_point"), q.get("away_price"))]
-    return [("home", None, q.get("home_price")), ("away", None, q.get("away_price"))]
+        return [("home", q.get("home_point"), q.get("home_price"), hq), ("away", q.get("away_point"), q.get("away_price"), aq)]
+    return [("home", None, q.get("home_price"), hq), ("away", None, q.get("away_price"), aq)]
 
 
 def evaluate_quotes(model: GameModel, quotes: List[dict], base: Optional[GameModel] = None) -> List[dict]:
@@ -43,7 +44,7 @@ def evaluate_quotes(model: GameModel, quotes: List[dict], base: Optional[GameMod
         mk = market_key(q["market_type"], q["period"])
         if mk is None:
             continue
-        for side, point, price in _sides(q["market_type"], q):
+        for side, point, price, price_quoted in _sides(q["market_type"], q):
             if price is None or (q["market_type"] != "h2h" and point is None):
                 continue
             r = model.prob_for(mk, side, point)
@@ -65,6 +66,7 @@ def evaluate_quotes(model: GameModel, quotes: List[dict], base: Optional[GameMod
                 "base_prob": base_prob, "base_ev": base_ev,
                 "period_src": q["period"], "sportsbook_id": q["sportsbook_id"], "sportsbook": q["book"],
                 "book_group": q.get("book_group"), "price": float(price), "quoted_at": q.get("timestamp"),
+                "price_quoted": float(price_quoted) if price_quoted is not None else float(price), "price_basis": q.get("price_basis", "book"),
                 "fair_prob": round(p_win, 5), "push_prob": round(p_push, 5),
                 "fair_price": fair_price_no_push(p_win, p_push),
                 "ev": round(ev, 5), "kelly": round(kelly_fraction(p_win, p_push, price) or 0.0, 5),

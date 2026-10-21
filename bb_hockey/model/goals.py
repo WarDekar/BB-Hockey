@@ -64,7 +64,7 @@ class ModelParams:
     eng_chain: float = 0.18       # of one-goal leads that took the empty-netter, the share that take a second (down 1 late, lost by 2+ → by 3+)
     eng_rate3: float = 0.14       # league: three-goal leads that become four (down 3 late, lost by 3+ → by 4+)
     eng_prior_games: int = 40     # shrinkage weight toward the league for a coach's own rate
-    strength_sigma: float = 0.35  # sd of the log rate-ratio around the fitted one (pregame strength is uncertain): widens margins, 5-point mixture
+    strength_sigma: float = 0.0   # optional mixture on the log rate-ratio; tested at 0.35 on 1,743 finals and rejected (overstates underdog blowouts)
     coach_eng: bool = True        # use the trailing side's coach rates when the benches are known
     ot_decided_share: float = 0.65
     ot_skill_k: float = 0.5

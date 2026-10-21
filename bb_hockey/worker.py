@@ -49,6 +49,8 @@ def pricing_pass(odds: Engine, hockey: Engine, params: Optional[ModelParams] = N
     for g in games:
         g = dict(g); g["status"] = _status(g)
         if g["status"] != "pregame" or g["id"] not in cons:
+            with hockey.begin() as c:   # a game we cannot price this pass keeps no edges from an earlier model
+                c.execute(text("DELETE FROM edges WHERE game_id = :g"), {"g": g["id"]})
             continue
         home_t, away_t = resolve(g["home_name"]), resolve(g["away_name"])   # slate rows carry names, not abbreviations
         eng = pbp.eng_for_game(hockey, nhl_abbr(home_t.abbr if home_t else None), nhl_abbr(away_t.abbr if away_t else None), params)
@@ -64,9 +66,9 @@ def pricing_pass(odds: Engine, hockey: Engine, params: Optional[ModelParams] = N
             if pos:
                 c.execute(text("""
                     INSERT INTO edges (snapshot_id, game_id, market, side, point, period_src, sportsbook_id, sportsbook,
-                                       book_group, price, quoted_at, fair_prob, push_prob, fair_price, ev, kelly, base_prob, base_ev)
+                                       book_group, price, quoted_at, fair_prob, push_prob, fair_price, ev, kelly, base_prob, base_ev, price_quoted, price_basis)
                     VALUES (:sid, :game_id, :market, :side, :point, :period_src, :sportsbook_id, :sportsbook,
-                            :book_group, :price, :quoted_at, :fair_prob, :push_prob, :fair_price, :ev, :kelly, :base_prob, :base_ev)
+                            :book_group, :price, :quoted_at, :fair_prob, :push_prob, :fair_price, :ev, :kelly, :base_prob, :base_ev, :price_quoted, :price_basis)
                 """), [dict(r, sid=sid) for r in pos])
             n_edges += sum(1 for r in pos if r["ev"] >= settings.min_edge)
             top.extend(dict(r, home=g["home_name"], away=g["away_name"]) for r in pos[:3] if r["ev"] >= settings.min_edge)
