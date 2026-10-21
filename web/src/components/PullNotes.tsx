@@ -56,7 +56,7 @@ export default function PullNotes() {
         <Stat label="Down 2 late → loses by 3+" value={pct(L2.lose_big, 0)} sub={`league, ${L2.n} team-games · +2.5 fails`} />
         <Stat label="Down 2 late → a goal after 17:00" value={pct(L2.late1, 0)} sub={`league · avg ${L2.late_goals?.toFixed(2)} late goals, moves a 6.5`} />
         <Stat label="Benches with a lean" value={leans} sub={`of ${d.coaches.length} current coaches`} />
-        <Stat label="Sample" value={`${seasonLabel(d.season - 30003)}–${seasonLabel(d.season).slice(5)}`} sub="regular season + playoffs" />
+        <Stat label="Sample" value={`${seasonLabel(d.season - 30003)} to ${seasonLabel(d.season)}`} sub="regular season + playoffs" />
       </div>
       <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-slate-800 bg-slate-900 px-3 py-2">
         <ChipGroup value={only} onChange={(v) => setOnly(v)} options={[["leans", "With a lean"], ["d1", "Puck line"], ["d2", "Alt +2.5"], ["tot", "Totals"]]} />
