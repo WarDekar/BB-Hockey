@@ -101,3 +101,11 @@ export function MultiSelect({ options, value, onChange, noun = "books" }: { opti
     </div>
   );
 }
+
+// Market vocabulary → line type / period, shared by the Bets and Edges bars.
+export const lineOf = (m: string) => (m.endsWith("ml") || m.endsWith("3way") ? "ml" : m === "puck" || m.endsWith("spread") ? "spread" : "total");
+export const periodOf = (m: string) => (/^p\d/.test(m) ? m.slice(0, 2) : "game");
+export const LINE_OPTS: [string, string][] = [["ml", "ML"], ["spread", "Puck"], ["total", "Total"]];
+export const PERIOD_OPTS: [string, string][] = [["game", "Game"], ["p1", "P1"], ["p2", "P2"], ["p3", "P3"]];
+export const teamMatch = (q: string, r: { home_name?: string; away_name?: string; home_abbr?: string | null; away_abbr?: string | null }) =>
+  !q || [r.home_name, r.away_name, r.home_abbr, r.away_abbr].some((x) => x?.toLowerCase().includes(q));

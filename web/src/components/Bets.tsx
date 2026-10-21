@@ -3,7 +3,7 @@ import type { Bet } from "../lib/api";
 import { sendJson } from "../lib/api";
 import { evClass, fmtAmerican, fmtTime, marketLabel, matchup, money, num, pct, sideLabel, signedPct } from "../lib/format";
 import { Button, Empty, ErrorBox, Panel, Pill, Stat, Td, Th } from "./Primitives";
-import { ChipGroup, Divider, MultiSelect, Select, inputClass } from "./Filters";
+import { ChipGroup, Divider, LINE_OPTS, MultiSelect, PERIOD_OPTS, Select, inputClass, lineOf, periodOf, teamMatch } from "./Filters";
 
 // Filter bar after BB-Odds's My Till: status × line × period × source chip
 // groups, a books multi-select and a game-date preset, all composing. The
@@ -13,8 +13,6 @@ const DEFAULT: Filters = { status: "all", line: "all", period: "all", source: "a
 const KEY = "bbh_bets_filters_v1";
 const load = (): Filters => { try { return { ...DEFAULT, ...JSON.parse(localStorage.getItem(KEY) || "{}"), team: "" }; } catch { return DEFAULT; } };
 
-const lineOf = (m: string) => (m.endsWith("ml") || m.endsWith("3way") ? "ml" : m === "puck" || m.endsWith("spread") ? "spread" : "total");
-const periodOf = (m: string) => (/^p\d/.test(m) ? m.slice(0, 2) : "game");
 
 const DATE_OPTS = [
   { value: "all", label: "All time" }, { value: "today", label: "Today" }, { value: "yesterday", label: "Yesterday" }, { value: "last7", label: "Last 7 days" },
@@ -88,7 +86,7 @@ export default function Bets({ bets, reload, onOpen }: { bets: Bet[]; reload: ()
         const t = new Date(b.game_time ?? b.placed_at);
         if ((lo && t < lo) || (hi && t >= hi)) return false;
       }
-      if (team && ![b.home_name, b.away_name, b.home_abbr, b.away_abbr].some((x) => x?.toLowerCase().includes(team))) return false;
+      if (!teamMatch(team, b)) return false;
       return true;
     });
   }, [bets, f]);
@@ -133,9 +131,9 @@ export default function Bets({ bets, reload, onOpen }: { bets: Bet[]; reload: ()
       <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-slate-800 bg-slate-900 px-3 py-2">
         <ChipGroup value={f.status} onChange={(status) => set({ status })} options={[["pending", "Pending"], ["settled", "Settled"], ["won", "Won"], ["lost", "Lost"], ["push", "Push"], ["void", "Void"]]} />
         <Divider />
-        <ChipGroup value={f.line} onChange={(line) => set({ line })} options={[["ml", "ML"], ["spread", "Puck"], ["total", "Total"]]} />
+        <ChipGroup value={f.line} onChange={(line) => set({ line })} options={LINE_OPTS} />
         <Divider />
-        <ChipGroup value={f.period} onChange={(period) => set({ period })} options={[["game", "Game"], ["p1", "P1"], ["p2", "P2"], ["p3", "P3"]]} />
+        <ChipGroup value={f.period} onChange={(period) => set({ period })} options={PERIOD_OPTS} />
         <Divider />
         <ChipGroup value={f.source} onChange={(source) => set({ source })} options={[["auto", "Auto"], ["manual", "Manual ✎"]]} />
         <Divider />
