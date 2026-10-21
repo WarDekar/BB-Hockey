@@ -39,7 +39,10 @@ export interface Game {
   home_rotation: number | null; away_rotation: number | null; status: string; final_home: number | null; final_away: number | null;
   reg_home: number | null; reg_away: number | null; periods: number[][] | null; went_ot: boolean | null; went_so: boolean | null; settled_at: string | null;
 }
-export interface SlateRow extends Game { snapshot_id: number | null; priced_at: string | null; inputs: Inputs | null; summary: Summary | null; n_edges: number; best_ev: number | null; n_bets: number; pnl: number }
+export interface BenchStat { n: number; n_this: number; lose_big: number | null; pull_rate: number | null; median_s: number | null; en: number | null; late1: number | null; late_goals: number | null; point: number | null }
+export interface BenchLean { edge: number | null; strength: string; market: string | null; text: string }
+export interface Bench { coach: string; team: string; since: string; lean1: BenchLean; lean2: BenchLean; total1: BenchLean; total2: BenchLean; tags: string[]; down1: BenchStat | null; down2: BenchStat | null; score: number }
+export interface SlateRow extends Game { snapshot_id: number | null; priced_at: string | null; inputs: Inputs | null; summary: Summary | null; n_edges: number; best_ev: number | null; n_bets: number; pnl: number; home_bench: Bench | null; away_bench: Bench | null }
 export interface BoardRow { market: string; side: string; point: number | null; prob: number; push: number; fair_price: number | null }
 export interface QuoteRow { game_id: number; market: string; side: string; point: number | null; period_src: string; sportsbook_id: number; sportsbook: string; book_group: string | null; price: number; quoted_at: string | null; fair_prob: number; push_prob: number; fair_price: number | null; ev: number; kelly: number }
 export interface Edge extends QuoteRow { id: number; home_name: string; away_name: string; home_abbr: string | null; away_abbr: string | null; game_time: string; status: string; papered: boolean }

@@ -15,6 +15,7 @@ from ..edges import best_per_side, evaluate_quotes
 from ..model.goals import MARKETS, ModelParams
 from ..model.odds_math import ev_per_unit, fair_price_no_push, kelly_fraction
 from ..pricer import latest_snapshot, load_params, model_from_snapshot, save_params
+from ..teams import nhl_abbr
 from ..worker import pbp_pass, pricing_pass, settlement_pass
 
 router = APIRouter()
@@ -55,6 +56,10 @@ def slate(hours_back: int = 14, hours_ahead: Optional[int] = None) -> List[dict]
                            WHERE p.game_id = g.id AND p.kind = 'live' ORDER BY computed_at DESC LIMIT 1) s ON true
         WHERE g.game_time BETWEEN :lo AND :hi ORDER BY g.game_time, g.id
     """, lo=now - timedelta(hours=hours_back), hi=now + timedelta(hours=hours_ahead), min_edge=settings.min_edge)
+    notes = pbp.notes_by_team(hockey_engine())
+    for g in games:
+        g["home_bench"] = notes.get(nhl_abbr(g.get("home_abbr")))
+        g["away_bench"] = notes.get(nhl_abbr(g.get("away_abbr")))
     return games
 
 

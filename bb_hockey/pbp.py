@@ -718,3 +718,27 @@ def coach_notes(engine: Engine) -> dict:
                       "the opponent's -1.5 cashes (the team's +2.5 fails). Pull rate, median time left and empty-net rate describe how the coach gets there. "
                       "Late goals: goals added after 17:00 of the third by either side, overtime and the shootout goal included, which is what moves a 5.5 / 6 / 6.5 total. "
                       "Leans need at least 12 situations and a 5-point gap to the league; strong needs 25 and 8 points."}
+
+
+# ----------------------------------------------------------------------------- slate attachment
+_notes_cache: dict = {"at": None, "by_team": {}}
+
+
+def notes_by_team(engine: Engine, max_age_s: int = 600) -> Dict[str, dict]:
+    """Current-bench notes keyed by NHL abbreviation, cached a few minutes (the slate is polled every minute)."""
+    now = datetime.now(timezone.utc)
+    if _notes_cache["at"] is None or (now - _notes_cache["at"]).total_seconds() > max_age_s:
+        try:
+            notes = coach_notes(engine)
+            compact = {}
+            for n in notes["coaches"]:
+                d1, d2 = n["down1"], n["down2"]
+                pick = lambda r: None if not r else {k: r.get(k) for k in ("n", "n_this", "lose_big", "pull_rate", "median_s", "en", "late1", "late_goals", "point")}  # noqa: E731
+                compact[n["team"]] = {"coach": n["coach"], "team": n["team"], "since": n["since"], "lean1": n["lean1"], "lean2": n["lean2"],
+                                      "total1": n["total1"], "total2": n["total2"], "tags": [f"{t} (down 1)" for t in n["tags1"]] + [f"{t} (down 2)" for t in n["tags2"]],
+                                      "down1": pick(d1), "down2": pick(d2), "score": n["score"]}
+            _notes_cache.update(at=now, by_team=compact, league={k: {f: v for f, v in notes["league"][k].items() if f in ("lose_big", "pull_rate", "median_s", "en", "late1", "late_goals")} for k in (1, 2)})
+        except Exception as e:  # noqa: BLE001
+            logger.warning("coach notes unavailable for the slate: %s", e)
+            _notes_cache.update(at=now)
+    return _notes_cache["by_team"]

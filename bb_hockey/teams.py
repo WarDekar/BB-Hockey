@@ -93,3 +93,12 @@ def resolve(name: Optional[str]) -> Optional[Team]:
         if n.endswith(_norm(t.nickname)):
             return t
     return None
+
+
+# NHL.com's own abbreviations differ from ESPN's for four clubs; everything from nhl.py / pbp.py uses these.
+ESPN_TO_NHL = {"LA": "LAK", "NJ": "NJD", "SJ": "SJS", "TB": "TBL"}
+NHL_TO_ESPN = {v: k for k, v in ESPN_TO_NHL.items()}
+
+
+def nhl_abbr(espn_abbr):
+    return ESPN_TO_NHL.get(espn_abbr, espn_abbr) if espn_abbr else None
