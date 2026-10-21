@@ -3,7 +3,7 @@ import type { Edge } from "../lib/api";
 import { ago, evClass, fmtAmerican, fmtClock, marketLabel, pct, sideLabel, signedPct } from "../lib/format";
 import { BookBadge } from "./BookBadge";
 import { HoverTip } from "./HoverTip";
-import { Matchup, SideCell } from "./TeamMark";
+import { SideCell, TeamTag } from "./TeamMark";
 import { Empty, Panel, Pill, Td, Th } from "./Primitives";
 import { ChipGroup, Divider, LINE_OPTS, MultiSelect, PERIOD_OPTS, inputClass, lineOf, periodOf, teamMatch } from "./Filters";
 
@@ -86,11 +86,13 @@ export default function Edges({ rows, minEdge, onOpen }: { rows: Edge[]; minEdge
         {!shown.length ? <Empty>{!rows.length ? "No pregame quotes evaluated yet." : f.books && f.books.length === 0 ? "No books selected: pick some in the books dropdown, or All." : `No quotes match these filters above ${pct(min)} EV. Lower min EV (it can go negative) to see the whole board.`}</Empty> : (
           <div className="min-h-0 flex-1 overflow-auto scrollbar-thin">
             <table className="w-full text-xs">
-              <thead className="sticky top-0 z-[1] bg-slate-900 shadow-[0_1px_0_0_var(--color-slate-800)]"><tr><Th>Game</Th><Th>Start</Th><Th>Market</Th><Th>Side</Th><Th>Book</Th><Th right>Price</Th><Th right>Fair</Th><Th right>Fair prob</Th><Th right>Base prob</Th><Th right>Bench adj</Th><Th right>EV</Th><Th right>Base EV</Th><Th right>¼ Kelly</Th><Th right>Quoted</Th><Th></Th></tr></thead>
+              <thead className="sticky top-0 z-[1] bg-slate-900 shadow-[0_1px_0_0_var(--color-slate-800)]"><tr><Th right>Away</Th><Th className="text-center">@</Th><Th>Home</Th><Th>Start</Th><Th>Market</Th><Th>Side</Th><Th>Book</Th><Th right>Price</Th><Th right>Fair</Th><Th right>Fair prob</Th><Th right>Base prob</Th><Th right>Bench adj</Th><Th right>EV</Th><Th right>Base EV</Th><Th right>¼ Kelly</Th><Th right>Quoted</Th><Th></Th></tr></thead>
               <tbody>
                 {shown.map((e) => (
                   <tr key={e.id} className="border-t border-slate-800/60 hover:bg-slate-800/40">
-                    <Td className="cursor-pointer font-medium text-slate-100" onClick={() => onOpen(e.game_id)}><Matchup g={e} /></Td><Td mono className="text-slate-400">{fmtClock(e.game_time)}</Td>
+                    <Td right className="cursor-pointer font-medium text-slate-100" onClick={() => onOpen(e.game_id)}><TeamTag abbr={e.away_abbr} name={e.away_name} rotation={e.away_rotation} pad align="right" /></Td>
+                    <Td className="cursor-pointer px-1 text-center text-slate-500" onClick={() => onOpen(e.game_id)}>@</Td>
+                    <Td className="cursor-pointer font-medium text-slate-100" onClick={() => onOpen(e.game_id)}><TeamTag abbr={e.home_abbr} name={e.home_name} rotation={e.home_rotation} pad /></Td><Td mono className="text-slate-400">{fmtClock(e.game_time)}</Td>
                     <Td>{marketLabel(e.market)}</Td><Td><SideCell side={e.side} label={sideLabel(e.side, e.point, e.home_abbr, e.away_abbr)} homeAbbr={e.home_abbr} awayAbbr={e.away_abbr} /></Td>
                     <Td className="cursor-pointer text-slate-400 hover:text-slate-200" onClick={() => set({ books: [e.sportsbook] })}><HoverTip tip={<span>{e.sportsbook} · click to filter to this book</span>}><span className="inline-flex items-center gap-1.5"><BookBadge name={e.sportsbook} />{e.sportsbook}</span></HoverTip></Td>
                     <Td right mono title={e.price_basis && e.price_basis !== "book" ? `${e.price_basis === "ask" ? "Polymarket ask" : "exchange mid less a haircut"} · quoted mid ${fmtAmerican(e.price_quoted)}` : undefined}>{fmtAmerican(e.price)}{e.price_basis && e.price_basis !== "book" ? <span className="text-slate-500">{e.price_basis === "ask" ? " ask" : " ~"}</span> : null}</Td><Td right mono className="text-slate-400">{fmtAmerican(e.fair_price)}</Td>

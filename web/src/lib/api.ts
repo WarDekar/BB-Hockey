@@ -48,14 +48,14 @@ export interface Bench { coach: string; team: string; since: string; lean1: Benc
 export interface SlateRow extends Game { snapshot_id: number | null; priced_at: string | null; inputs: Inputs | null; summary: Summary | null; n_edges: number; best_ev: number | null; n_bets: number; pnl: number; home_bench: Bench | null; away_bench: Bench | null }
 export interface BoardRow { market: string; side: string; point: number | null; prob: number; push: number; fair_price: number | null }
 export interface QuoteRow { game_id: number; market: string; side: string; point: number | null; period_src: string; sportsbook_id: number; sportsbook: string; book_group: string | null; price: number; quoted_at: string | null; fair_prob: number; push_prob: number; fair_price: number | null; ev: number; kelly: number; base_prob?: number | null; base_ev?: number | null; price_quoted?: number | null; price_basis?: string | null }
-export interface Edge extends QuoteRow { id: number; home_name: string; away_name: string; home_abbr: string | null; away_abbr: string | null; game_time: string; status: string; papered: boolean }
+export interface Edge extends QuoteRow { id: number; home_name: string; away_name: string; home_abbr: string | null; away_abbr: string | null; home_rotation?: number | null; away_rotation?: number | null; game_time: string; status: string; papered: boolean }
 export interface Snapshot { id: number; game_id: number; computed_at: string; kind: string; inputs: Inputs; params: Record<string, unknown>; summary: Summary; board: BoardRow[]; board_base?: BoardRow[] | null }
 export interface GameDetail { game: Game; snapshot: Snapshot | null; closing: Snapshot | null; quotes: QuoteRow[]; best: Record<string, QuoteRow>; edges: QuoteRow[]; bets: Bet[]; markets: string[] }
 export interface Bet {
   id: number; game_id: number; market: string; side: string; point: number | null; sportsbook: string; price: number; stake: number; fair_prob: number; push_prob: number;
   ev: number; kelly: number | null; source: string; placed_at: string; status: string; pnl: number | null; settled_at: string | null; closing_fair_prob: number | null;
   closing_price: number | null; clv_model: number | null; clv_price: number | null; note: string | null;
-  home_name?: string; away_name?: string; home_abbr?: string | null; away_abbr?: string | null; game_time?: string; final_home?: number | null; final_away?: number | null; game_status?: string;
+  home_name?: string; away_name?: string; home_rotation?: number | null; away_rotation?: number | null; home_abbr?: string | null; away_abbr?: string | null; game_time?: string; final_home?: number | null; final_away?: number | null; game_status?: string;
 }
 export interface BetSummary {
   pending: number; settled: number; won: number; lost: number; pushed: number; staked: number; pnl: number; roi: number | null;

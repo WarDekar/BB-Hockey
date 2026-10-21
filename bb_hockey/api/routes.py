@@ -135,7 +135,7 @@ def game_detail(game_id: int) -> dict:
 def edges(min_ev: Optional[float] = None, limit: int = 5000) -> List[dict]:
     min_ev = settings.min_edge if min_ev is None else min_ev
     return _rows("""
-        SELECT e.*, g.home_name, g.away_name, g.home_abbr, g.away_abbr, g.game_time, g.status,
+        SELECT e.*, g.home_name, g.away_name, g.home_abbr, g.away_abbr, g.home_rotation, g.away_rotation, g.game_time, g.status,
                EXISTS (SELECT 1 FROM paper_bets b WHERE b.game_id = e.game_id AND b.market = e.market AND b.side = e.side
                        AND b.point IS NOT DISTINCT FROM e.point AND b.status <> 'void') AS papered
         FROM edges e JOIN games g ON g.id = e.game_id

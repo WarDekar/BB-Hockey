@@ -66,7 +66,7 @@ coach: pull rate when down 1 / 2 / 3+ inside 3:00, median and IQR of time
 left, scored / tied / empty-netter rates. `GET /pulls/notes` is the cliff
 notes per current bench (puck-line, +2.5 and totals leans from late-deficit
 outcomes), shown as the Pulls tab's default view and as "Bench reads" on the
-Board (`/slate` rows carry `home_bench` / `away_bench`). The Board's matchup is Away / @ / Home columns with fixed-width rotation and code boxes (`TeamTag pad`), bench reads are Away bench / Home bench columns, and the consensus over / under price sits beside the total. The handoff for
+Board (`/slate` rows carry `home_bench` / `away_bench`). The Board, Edges and Bets tables show the matchup as Away / @ / Home columns with fixed-width rotation and code boxes (`TeamTag pad`; `/edges` and the ledger carry the rotations), bench reads are Away bench / Home bench columns, and the consensus over / under price sits beside the total. The handoff for
 BB-CBB's fouling-down-late analogue is in `docs/handoffs/for-bb-cbb/`. A "pull" is a trailing team's
 goalie-off gap inside the last ten minutes of regulation (inside 6:00, or at
 least 20 s long); the pull rules live in `derive_pulls`. NHL abbreviations

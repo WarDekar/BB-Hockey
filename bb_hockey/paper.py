@@ -80,7 +80,7 @@ def pnl_for(status: str, stake: float, price: float) -> float:
 
 def ledger(engine: Engine, status: Optional[str] = None, limit: int = 500) -> List[dict]:
     q = """
-        SELECT b.*, g.home_name, g.away_name, g.home_abbr, g.away_abbr, g.game_time, g.final_home, g.final_away,
+        SELECT b.*, g.home_name, g.away_name, g.home_abbr, g.away_abbr, g.home_rotation, g.away_rotation, g.game_time, g.final_home, g.final_away,
                g.status AS game_status
         FROM paper_bets b JOIN games g ON g.id = b.game_id
     """

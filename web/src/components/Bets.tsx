@@ -4,7 +4,7 @@ import { sendJson } from "../lib/api";
 import { evClass, fmtAmerican, fmtTime, marketLabel, money, num, pct, sideLabel, signedPct } from "../lib/format";
 import { BookBadge } from "./BookBadge";
 import { HoverTip } from "./HoverTip";
-import { Matchup, SideCell } from "./TeamMark";
+import { SideCell, TeamTag } from "./TeamMark";
 import { Button, Empty, ErrorBox, Panel, Pill, Stat, Td, Th } from "./Primitives";
 import { ChipGroup, DATE_OPTS, Divider, LINE_OPTS, MultiSelect, PERIOD_OPTS, Select, dateRange, inputClass, lineOf, periodOf, teamMatch } from "./Filters";
 
@@ -143,12 +143,14 @@ export default function Bets({ bets, reload, onOpen }: { bets: Bet[]; reload: ()
         {!shown.length ? <Empty>{bets.length ? "No paper bets match these filters." : "No paper bets. Auto-paper takes the best price on every edge above the threshold; the game page papers anything by hand."}</Empty> : (
           <div className="min-h-0 flex-1 overflow-auto scrollbar-thin">
             <table className="w-full text-xs">
-              <thead className="sticky top-0 z-[1] bg-slate-900 shadow-[0_1px_0_0_var(--color-slate-800)]"><tr><Th>Placed</Th><Th>Game</Th><Th>Market</Th><Th>Side</Th><Th>Book</Th><Th right>Price</Th><Th right>Stake</Th><Th right>Fair</Th><Th right>EV</Th><Th>Status</Th><Th right>P&L</Th><Th right>Close fair</Th><Th right>CLV model</Th><Th right>CLV price</Th><Th></Th></tr></thead>
+              <thead className="sticky top-0 z-[1] bg-slate-900 shadow-[0_1px_0_0_var(--color-slate-800)]"><tr><Th>Placed</Th><Th right>Away</Th><Th className="text-center">@</Th><Th>Home</Th><Th>Market</Th><Th>Side</Th><Th>Book</Th><Th right>Price</Th><Th right>Stake</Th><Th right>Fair</Th><Th right>EV</Th><Th>Status</Th><Th right>P&L</Th><Th right>Close fair</Th><Th right>CLV model</Th><Th right>CLV price</Th><Th></Th></tr></thead>
               <tbody>
                 {shown.map((b) => (
                   <tr key={b.id} className="border-t border-slate-800/60 hover:bg-slate-800/30">
                     <Td className="text-slate-500">{fmtTime(b.placed_at)}</Td>
-                    <Td className="cursor-pointer font-medium text-slate-100" onClick={() => onOpen(b.game_id)}><Matchup g={b} />{b.game_status === "final" ? <span className="ml-1 font-mono text-slate-500">{b.final_away}–{b.final_home}</span> : null}</Td>
+                    <Td right className="cursor-pointer font-medium text-slate-100" onClick={() => onOpen(b.game_id)}><TeamTag abbr={b.away_abbr} name={b.away_name} rotation={b.away_rotation} pad align="right" /></Td>
+                    <Td className="cursor-pointer px-1 text-center text-slate-500" onClick={() => onOpen(b.game_id)}>@</Td>
+                    <Td className="cursor-pointer font-medium text-slate-100" onClick={() => onOpen(b.game_id)}><TeamTag abbr={b.home_abbr} name={b.home_name} rotation={b.home_rotation} pad />{b.game_status === "final" ? <span className="ml-2 font-mono text-slate-500">{b.final_away}–{b.final_home}</span> : null}</Td>
                     <Td>{marketLabel(b.market)}</Td><Td><SideCell side={b.side} label={sideLabel(b.side, b.point, b.home_abbr, b.away_abbr)} homeAbbr={b.home_abbr} awayAbbr={b.away_abbr} /></Td>
                     <Td className="cursor-pointer text-slate-400 hover:text-slate-200" onClick={() => set({ books: [b.sportsbook] })}><HoverTip tip={<span>{b.sportsbook}{b.source === "manual" ? " · papered by hand" : ""} · click to filter to this book</span>}><span className="inline-flex items-center gap-1.5"><BookBadge name={b.sportsbook} />{b.sportsbook}{b.source === "manual" ? " ✎" : ""}</span></HoverTip></Td>
                     <Td right mono>{fmtAmerican(b.price)}</Td><Td right mono>{money(b.stake)}</Td><Td right mono className="text-slate-400">{pct(b.fair_prob)}</Td>
