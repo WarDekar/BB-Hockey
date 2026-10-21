@@ -21,7 +21,7 @@ export default function App() {
   const health = useApi<Health>("/health", 30000);
   const slate = useApi<SlateRow[]>(tab === "board" ? "/slate" : null, 60000);
   const edges = useApi<Edge[]>(tab === "edges" ? "/edges?min_ev=0" : null, 60000);
-  const bets = useApi<Bet[]>(tab === "bets" ? "/bets" : null, 60000);
+  const bets = useApi<Bet[]>(tab === "bets" ? "/bets?limit=5000" : null, 60000);
   const betSummary = useApi<BetSummary>(tab === "bets" ? "/bets/summary" : null, 60000);
   const results = useApi<ResultRow[]>(tab === "results" ? "/results" : null, 120000);
   const calib = useApi<Calib>(tab === "calibration" ? "/calibration" : null, 0);
@@ -76,7 +76,7 @@ export default function App() {
         ) : tab === "edges" ? (
           edges.error ? <ErrorBox error={edges.error} /> : edges.data ? <Edges rows={edges.data} minEdge={minEdge} onOpen={open} /> : <Empty>Loading…</Empty>
         ) : tab === "bets" ? (
-          bets.error ? <ErrorBox error={bets.error} /> : bets.data ? <Bets bets={bets.data} summary={betSummary.data} reload={() => { bets.reload(); betSummary.reload(); }} onOpen={open} /> : <Empty>Loading…</Empty>
+          bets.error ? <ErrorBox error={bets.error} /> : bets.data ? <Bets bets={bets.data} reload={() => { bets.reload(); betSummary.reload(); }} onOpen={open} /> : <Empty>Loading…</Empty>
         ) : tab === "results" ? (
           results.error ? <ErrorBox error={results.error} /> : results.data ? <Results rows={results.data} onOpen={open} /> : <Empty>Loading…</Empty>
         ) : tab === "calibration" ? (
