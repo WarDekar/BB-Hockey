@@ -61,6 +61,8 @@ class ModelParams:
     draw_inflation: float = 1.45
     eng_rate: float = 0.44        # league: one-goal leads that pick up the empty-netter (PBP 2023-26, 1,625 cases)
     eng_rate2: float = 0.42       # league: two-goal leads that become three (1,500 cases)
+    eng_chain: float = 0.18       # of one-goal leads that took the empty-netter, the share that take a second (down 1 late, lost by 2+ → by 3+)
+    eng_rate3: float = 0.14       # league: three-goal leads that become four (down 3 late, lost by 3+ → by 4+)
     eng_prior_games: int = 40     # shrinkage weight toward the league for a coach's own rate
     coach_eng: bool = True        # use the trailing side's coach rates when the benches are known
     ot_decided_share: float = 0.65
@@ -99,23 +101,36 @@ def _inflated_matrix(lh: float, la: float, n: int, inflation: float) -> np.ndarr
 ENG_KEYS = ("home_lead1", "away_lead1", "home_lead2", "away_lead2")
 
 
-def _apply_empty_net(m: np.ndarray, eng: Dict[str, float]) -> np.ndarray:
-    """Move empty-net mass: a share of one-goal regulation wins become two-goal wins and a
-    share of two-goal wins become three-goal wins. ``eng`` is keyed by who leads: the rate
-    for a home lead is the away coach's conversion (he is the one pulling)."""
+def _apply_empty_net(m: np.ndarray, eng: Dict[str, float], chain: float = 0.0, rate3: float = 0.0) -> np.ndarray:
+    """Move empty-net mass: a share of one-goal regulation wins become two-goal wins (and ``chain`` of
+    those a third goal: pull, concede, pull again), a share of two-goal wins become three, and
+    ``rate3`` of three-goal wins become four. ``eng`` is keyed by who leads: the rate for a home lead
+    is the away coach's conversion (he is the one pulling)."""
     n = m.shape[0] - 1
     out = m.copy()
     for h in range(n + 1):
         for a in range(n + 1):
             d = h - a
             if d == 1 and h + 1 <= n:
-                mv = m[h, a] * eng["home_lead1"]; out[h, a] -= mv; out[h + 1, a] += mv
+                mv = m[h, a] * eng["home_lead1"]; out[h, a] -= mv
+                second = mv * chain if h + 2 <= n else 0.0
+                out[h + 1, a] += mv - second
+                if second:
+                    out[h + 2, a] += second
             elif d == -1 and a + 1 <= n:
-                mv = m[h, a] * eng["away_lead1"]; out[h, a] -= mv; out[h, a + 1] += mv
+                mv = m[h, a] * eng["away_lead1"]; out[h, a] -= mv
+                second = mv * chain if a + 2 <= n else 0.0
+                out[h, a + 1] += mv - second
+                if second:
+                    out[h, a + 2] += second
             elif d == 2 and h + 1 <= n:
                 mv = m[h, a] * eng["home_lead2"]; out[h, a] -= mv; out[h + 1, a] += mv
             elif d == -2 and a + 1 <= n:
                 mv = m[h, a] * eng["away_lead2"]; out[h, a] -= mv; out[h, a + 1] += mv
+            elif d == 3 and h + 1 <= n and rate3:
+                mv = m[h, a] * rate3; out[h, a] -= mv; out[h + 1, a] += mv
+            elif d == -3 and a + 1 <= n and rate3:
+                mv = m[h, a] * rate3; out[h, a] -= mv; out[h, a + 1] += mv
     return out
 
 
@@ -138,7 +153,8 @@ class GameModel:
         n = p.max_goals
         self.n = n
         self.eng = resolve_eng(p, eng)
-        self.reg = _apply_empty_net(_inflated_matrix(lh, la, n, p.draw_inflation), self.eng)
+        self.reg = _apply_empty_net(_inflated_matrix(lh, la, n, p.draw_inflation), self.eng,
+                                    chain=getattr(p, "eng_chain", 0.0), rate3=getattr(p, "eng_rate3", 0.0))
         idx = np.arange(n + 1)
         H, A = np.meshgrid(idx, idx, indexing="ij")
         self.p_reg_home = float(self.reg[H > A].sum())

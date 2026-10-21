@@ -183,6 +183,8 @@ class ParamsBody(BaseModel):
     draw_inflation: Optional[float] = None
     eng_rate: Optional[float] = None
     eng_rate2: Optional[float] = None
+    eng_chain: Optional[float] = None
+    eng_rate3: Optional[float] = None
     eng_prior_games: Optional[int] = None
     coach_eng: Optional[bool] = None
     ot_decided_share: Optional[float] = None
