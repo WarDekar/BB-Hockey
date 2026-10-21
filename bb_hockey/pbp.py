@@ -196,8 +196,8 @@ def derive_pulls(game: dict, plays: List[dict], shifts: List[dict]) -> Tuple[Lis
                 kind = "ot"
             elif near_penalty and b - a <= 15 and not during:
                 kind = "delayed_penalty"
-            elif deficit >= 1 and (remaining <= 360 or b - a >= 20):
-                kind = "pull"
+            elif deficit >= 1 and remaining <= 600 and (remaining <= 360 or b - a >= 20):
+                kind = "pull"           # nobody pulls with more than ten minutes left; earlier gaps are swaps or data gaps
             else:
                 kind = "other"
             ended_by = "period_end" if b >= plen else ("goal_for" if during and _scored_by(during[-1], game, is_home) and during[-1]["elapsed_s"] == b
@@ -442,6 +442,18 @@ if __name__ == "__main__":
     elif cmd == "game":
         r = ingest_game(eng, int(sys.argv[2]), use_cache="--refetch" not in sys.argv)
         print(json.dumps(r, indent=1, default=str))
+    elif cmd == "rederive":
+        # Re-run parsing + derivation from the cached raw files (no network); after a rule change.
+        with eng.connect() as c:
+            ids = [(int(r[0]), int(r[1])) for r in c.execute(text("SELECT id, season FROM nhl_games WHERE error IS NULL ORDER BY id"))]
+        n_ok = 0
+        for gid, season in ids:
+            try:
+                ingest_game(eng, gid, season, use_cache=True); n_ok += 1
+            except Exception as e:  # noqa: BLE001
+                logger.warning("rederive %s failed: %s", gid, e)
+        rebuild_coaches(eng)
+        print({"games": len(ids), "ok": n_ok})
     elif cmd == "coaches":
         print("tenures:", rebuild_coaches(eng))
     else:

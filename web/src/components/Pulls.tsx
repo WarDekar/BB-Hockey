@@ -13,7 +13,7 @@ const KEY = "bbh_pulls_filters_v1";
 const load = (): Filters => { try { return { ...DEFAULT, ...JSON.parse(localStorage.getItem(KEY) || "{}"), search: "" }; } catch { return DEFAULT; } };
 
 const seasonLabel = (s: number) => `${String(s).slice(0, 4)}-${String(s).slice(6)}`;
-const mmss = (s: number | null) => (s === null || !isFinite(s) ? "—" : `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, "0")}`);
+const mmss = (s: number | null) => { if (s === null || !isFinite(s)) return "—"; const t = Math.round(s); return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, "0")}`; };
 const quantile = (xs: number[], q: number) => { if (!xs.length) return null; const a = [...xs].sort((x, y) => x - y); const i = (a.length - 1) * q; const lo = Math.floor(i); return a[lo] + (a[Math.min(lo + 1, a.length - 1)] - a[lo]) * (i - lo); };
 const inDeficit = (s: PullSituation, k: number) => (k >= 3 ? s.late_deficits.some((d) => d >= 3) : s.late_deficits.includes(k));
 const pullsAt = (s: PullSituation, k: number) => s.pulls.filter((p) => (k >= 3 ? p.deficit >= 3 : p.deficit === k));
