@@ -129,14 +129,28 @@ shares were one global prior (0.28). Now:
   to the league clears 5 points on 12+ games) and as a column on the Board
   next to each game.
 
-For CBB the analogue is the late-game margin distribution: given the
-pregame spread and total, the model's margin distribution near the number
-should be reshaped by the trailing coach's fouling profile (how early he
-starts, how many fouls per 10 seconds, the opponent's free-throw %) rather
-than a single league prior. The simplest first version: per coach × deficit
-bucket, the empirical distribution of `final margin − margin at 1:00` and
-`points in the last minute`, shrunk to the league, applied as a late-game
-kernel on top of the pregame model.
+**Update 2026-10-21: the kernel form is now what hockey runs**, and it is
+the form to copy. The pregame Poisson model only runs to 17:00 of the
+third; from there the game moves by a measured transition table: for each
+goal margin at 17:00 (0, 1, 2, 3, 4+), the probability of every (leader
+adds, trailer adds) pair of goals to the horn, read straight off 4,343
+finals (`goals.LATE_KERNEL`, `python -m bb_hockey.pbp kernel`). Down one at
+17:00: 37% nothing happens, 34% the leader scores into the empty net, 17%
+the trailer ties it, 8% two empty-netters. The coach enters as an odds
+ratio on the "leader adds one" branch (his conversion against the
+league's), so a thin bench falls back to the table. This replaced the
+earlier mass-shift parameters and fixed the one thing they could not: the
+parity of the total (odd totals 67.9% modelled vs 67.5% real; the
+Poisson tail gave 65.6%), which is the 5.5 / 6 / 6.5 market.
+
+For CBB the analogue is the same table at 1:00 (or 0:45) by margin bucket:
+for each (margin at the cut, maybe possession), the empirical distribution
+of (leader points, trailer points) to the buzzer, with the trailing coach's
+fouling profile (how early he starts, fouls per 10 seconds, the opponent's
+free-throw %) entering as a reweight of the "margin grows" branches. Fit
+the pregame model to the market with the kernel in place, so the spread and
+total still reproduce; the kernel then reshapes the margin near the number
+and the total's parity, which is what the alternates pay for.
 
 ## 6. Lessons that cost us time
 

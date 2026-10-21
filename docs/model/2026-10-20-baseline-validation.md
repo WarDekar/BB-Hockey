@@ -78,13 +78,12 @@ cover rate there and halves the underdog's. Read the bands as direction.
 - **Heavy favourites (≥ 68%)**: the model is 1 point generous on the −1.5
   and 2 points harsh on the dog +2.5; treat big-favourite puck-line edges
   with suspicion.
-- **Totals shape**: the quoted-total probability is fitted, so it is right by
-  construction, but the distribution under it is not: in the 629 games lined
-  at 6.0, exactly six goals happened 9.4% of the time against 12.0% modelled,
-  so under 6.5 and over 5.5 are each about 1.3 points rich in the model when
-  the line is 6. The fix is a late-game goal kernel from the play-by-play
-  (`pull_situations.late_goals`): goals added after 17:00 by state, rather
-  than a Poisson tail. Next step.
+- **Totals shape** (fixed 2026-10-21, see below): the quoted-total
+  probability is fitted, so it is right by construction, but the
+  distribution under it was not: with the Poisson tail running to the
+  horn, exactly six goals in games lined at 6.0 happened 9.4% of the time
+  against 11.7% modelled and sevens came 18.7% against 21.1%. The late-game
+  kernel brings these to 11.1% and 19.5%.
 - **Exchange quotes**: BB-Odds stores Polymarket and Kalshi at the bid/ask
   mid. The pricer now reads the Polymarket ask from BB-Poly (about 0.6
   points inside the mid on spreads and moneylines, 2.8 on totals) and
@@ -92,6 +91,62 @@ cover rate there and halves the underdog's. Read the bands as direction.
   a price is on. Before this, a +257 mid on a −1.5 read as +14% EV against
   a fair of +212; at the ask against the corrected fair of +226 it is about
   +7%, and at Pinnacle's +233 about +2%.
+
+## The late-game kernel (2026-10-21)
+
+The Poisson pair now runs to 17:00 of the third (`LATE_CUT_S` = 180) and the
+last three minutes come from a measured transition: for each goal margin at
+17:00 (0, 1, 2, 3, 4+), the distribution of (leader adds, trailer adds)
+regulation goals from there, read off 4,343 NHL.com play-by-play finals
+2023-24 to date (`python -m bb_hockey.pbp kernel`, `goals.LATE_KERNEL`).
+Ties after 60 resolve as before. The empty-net mass shifts (`eng_rate`,
+`eng_rate2`, `eng_chain`, `eng_rate3`) are no longer applied under the
+kernel: the kernel carries the empty-netters, the tying goals with the net
+empty and the chains itself. The coach rates still matter: the trailing
+coach's conversion relative to the league reference moves the kernel's
+"leader adds one" branch by the same odds ratio, so a bench that concedes
+60% against the league's 44% lifts the favourite −1.5 from 35.5% to 37.6%
+on a typical line, and a 30% bench cuts it to 33.5%. `draw_inflation` now
+applies at 17:00 and drops from 1.45 to 1.20 (about 20% tied at 17:00
+against 19.3% in the play-by-play; 21.7% tied after 60 against 21.5% in
+the validation sample). `ot_decided_share` is 0.68 (904 OT games, 290
+shootouts).
+
+What the kernel says (mean regulation goals after 17:00 by margin at
+17:00): tied 0.25, down one 0.76, down two 0.92, down three 0.46, down
+four or more 0.21. Down one: 37% nothing, 34% the empty-netter, 17% the
+tying goal, 8% two empty-netters. Down two: 51% one empty-netter, 25%
+nothing, 10% the trailer pulls one back, 6% one each.
+
+Same 1,743 finals, old path against the kernel:
+
+| Quantity | Realised | Poisson tail + shifts | Late kernel |
+|---|---:|---:|---:|
+| Favourite −1.5 | 41.4% | 39.9% | 39.3% |
+| Favourite −2.5 | 29.0% | 26.9% | 28.1% |
+| Favourite −3.5 | 12.4% | 12.3% | 12.5% |
+| Underdog +2.5 | 71.0% | 73.1% | 71.9% |
+| Underdog wins by 2+ | 19.4% | 22.6% | 22.4% |
+| Any margin of 2+ | 60.8% | 62.5% | 61.7% |
+| Regulation tie | 21.5% | 22.0% | 21.7% |
+| Odd total | 67.5% | 65.6% | 67.9% |
+| Exactly 6 at a 6.0 line (n 629) | 9.4% | 11.7% | 11.1% |
+| Exactly 7 goals | 21.1% | 18.7% | 19.5% |
+| Exactly 3 goals | 9.2% | 10.7% | 11.1% |
+| Under 6 at a 6.5 line (n 528) | 37.5% | 38.3% | 38.9% |
+| Over 7 at a 6.5 line | 31.1% | 30.7% | 29.9% |
+
+The alternates and the parity of the total move toward the data; the
+favourite −1.5 gives back 0.6 points (the kernel's down-one empty-net share
+at 17:00 is the league's, and the favourite-won-more residual above is
+unchanged). The one residual that got slightly worse is the low tail:
+three-goal games are 2 points over-produced, which is the Poisson's shape
+under a 5.5 line rather than anything late. The kernel is the same for
+every game; late scoring in high-total games is not scaled up, and the
+tails at 6.5 lines read about a point thin. Both are logged, not fitted.
+
+`late_kernel = 0` in Params restores the old path (set `draw_inflation`
+back to 1.45 with it).
 
 ## How to target with this
 

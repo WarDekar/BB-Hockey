@@ -92,3 +92,21 @@ def test_board_shape():
 def test_params_roundtrip():
     p = ModelParams(draw_inflation=1.2, period_shares=(0.3, 0.3, 0.4))
     assert ModelParams.from_dict(p.to_dict()) == p
+
+
+def test_late_kernel_is_proper_and_coach_sensitive():
+    from bb_hockey.model.goals import LATE_KERNEL, GameModel, ModelParams
+    for d, cells in LATE_KERNEL.items():
+        assert abs(sum(cells.values()) - 1.0) < 0.01, d
+    base = GameModel(3.0, 2.6, ModelParams())
+    assert abs(base.reg.sum() - 1.0) < 1e-9 and abs(base.full.sum() - 1.0) < 1e-9
+    hot = GameModel(3.0, 2.6, ModelParams(), {"home_lead1": 0.60})
+    cold = GameModel(3.0, 2.6, ModelParams(), {"home_lead1": 0.30})
+    cover = lambda m: m.prob_for("puck", "home", -1.5)[0]  # noqa: E731
+    assert cover(cold) < cover(base) < cover(hot)
+    assert abs(hot.p_home - base.p_home) < 1e-9  # the empty-netter does not change who wins
+    legacy = GameModel(3.0, 2.6, ModelParams(late_kernel=False, draw_inflation=1.45))
+    assert abs(legacy.full.sum() - 1.0) < 1e-9
+    # Kernel games end with an odd total more often than the Poisson tail says (OT goals + empty-netters).
+    odd = lambda m: sum(v for k, v in m.total_full.items() if k % 2)  # noqa: E731
+    assert odd(base) > odd(legacy)

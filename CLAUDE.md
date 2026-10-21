@@ -1,6 +1,6 @@
 # BB-Hockey — Claude Context
 
-**Last updated: 2026-10-20.** This is the Hockey Claude: this repo owns NHL
+**Last updated: 2026-10-21.** This is the Hockey Claude: this repo owns NHL
 derivative pricing in the `~/Dev` fleet. Cross-project communication happens
 only through `docs/handoffs/` markdown (see `Brandos-World/conventions/`).
 
@@ -134,9 +134,22 @@ returns rows from the last 20 minutes, so nothing survives a model change.
    on both sides, so the shape is kept symmetric. A strength mixture
    (`strength_sigma`) was tried and rejected: it matched the favourite side
    by overstating underdog blowouts (any 2+ margin 64.9%). Remaining known
-   residuals: totals under-produce odd numbers (7: 18.4% vs 21.1%, exact 6
-   overstated by ~1.5 points); at ≥68% favourites the dog +2.5 is better than
-   modelled. See `docs/model/2026-10-20-baseline-validation.md`.
+   residuals: at ≥68% favourites the dog +2.5 is better than modelled;
+   three-goal games are ~2 points over-produced. See
+   `docs/model/2026-10-20-baseline-validation.md`.
+   **Late-game kernel (2026-10-21, `late_kernel`, default on):** the Poisson
+   pair runs to 17:00 of the third and the last three minutes come from
+   `goals.LATE_KERNEL`, the measured distribution of (leader adds, trailer
+   adds) regulation goals by margin at 17:00 (4,343 PBP finals; `python -m
+   bb_hockey.pbp kernel` re-measures it). It replaces the empty-net mass
+   shifts (`eng_chain` / `eng_rate3` are old-path only); the coach rates
+   move the kernel's empty-net branch by their odds ratio against
+   `eng_rate` / `eng_rate2`. `draw_inflation` applies at 17:00 and is 1.20
+   (1.45 was the full-game value); `ot_decided_share` 0.68 measured. On the
+   1,743 finals it fixed the totals parity (odd totals 67.9% vs 67.5% real,
+   was 65.6%; exact 6 at 6.0 lines 11.1% vs 9.4%, was 11.7%) and the
+   alternates (fav −2.5 28.1 vs 29.0, dog +2.5 71.9 vs 71.0) at the cost of
+   0.6 points on the fav −1.5 (39.3 vs 41.4).
    **Exchange quotes are mids.** BB-Odds stores Polymarket (ids 700/761) and
    Kalshi (760) at the bid/ask midpoint (the ±1.5 pair shows identical
    prices), which BB-Odds's own notes call phantom +EV; `edges.py` applies a

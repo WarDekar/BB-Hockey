@@ -17,6 +17,7 @@ CLI::
     ./.venv/bin/python -m bb_hockey.pbp game 2026020138
     ./.venv/bin/python -m bb_hockey.pbp recent
     ./.venv/bin/python -m bb_hockey.pbp coaches      # rebuild the coaches table from nhl_games
+    ./.venv/bin/python -m bb_hockey.pbp kernel       # re-measure the model's late-game kernel (goals.LATE_KERNEL)
 """
 from __future__ import annotations
 
@@ -430,6 +431,49 @@ def rebuild_coaches(engine: Engine, league: str = "NHL") -> int:
     return len(tenures)
 
 
+# ----------------------------------------------------------------------------- late-game kernel for the model
+_KERNEL_SQL = """
+WITH at1700 AS (
+    SELECT g.id AS game_id, l.away_score, l.home_score
+    FROM nhl_games g
+    LEFT JOIN LATERAL (
+        SELECT away_score, home_score FROM nhl_plays p
+        WHERE p.game_id = g.id AND (p.period < 3 OR (p.period = 3 AND p.elapsed_s <= 1200 - :cut))
+        ORDER BY p.period DESC, p.elapsed_s DESC, p.sort_order DESC LIMIT 1) l ON true
+    WHERE g.error IS NULL AND g.game_type IN (2, 3) {season_where}
+)
+SELECT a.home_score AS h_cut, a.away_score AS a_cut, g.reg_home, g.reg_away
+FROM nhl_games g JOIN at1700 a ON a.game_id = g.id
+WHERE a.home_score IS NOT NULL AND g.reg_home IS NOT NULL
+"""
+
+
+def late_kernel(engine: Engine, cut_s: int = 180, seasons: Optional[List[int]] = None, min_count: int = 2) -> dict:
+    """Measure the model's late-game kernel: per goal margin at ``cut_s`` before the end of regulation
+    (0, 1, 2, 3, 4 = four or more), the distribution of (leader adds, trailer adds) regulation goals from
+    there. Margin 0 pools the two orders as (more, fewer). This is ``goals.LATE_KERNEL``; the CLI
+    ``kernel`` command prints it ready to paste, with the counts it rests on."""
+    where = "AND g.season = ANY(:seasons)" if seasons else ""
+    counts: Dict[int, Dict[Tuple[int, int], int]] = {d: {} for d in range(5)}
+    n: Dict[int, int] = {d: 0 for d in range(5)}
+    with engine.connect() as c:
+        rows = c.execute(text(_KERNEL_SQL.format(season_where=where)), {"cut": int(cut_s), "seasons": [int(s) for s in seasons or []]}).mappings()
+        for r in rows:
+            d = int(r["h_cut"]) - int(r["a_cut"])
+            if d >= 0:
+                lead, trail = int(r["reg_home"]) - int(r["h_cut"]), int(r["reg_away"]) - int(r["a_cut"])
+            else:
+                lead, trail = int(r["reg_away"]) - int(r["a_cut"]), int(r["reg_home"]) - int(r["h_cut"])
+            dd = min(abs(d), 4)
+            if dd == 0:
+                lead, trail = max(lead, trail), min(lead, trail)
+            counts[dd][(lead, trail)] = counts[dd].get((lead, trail), 0) + 1
+            n[dd] += 1
+    kernel = {d: {k: round(v / n[d], 4) for k, v in sorted(counts[d].items()) if v >= min_count and n[d]} for d in range(5)}
+    return {"cut_s": cut_s, "games": sum(n.values()), "n": n, "kernel": kernel,
+            "mean_late_reg_goals": {d: round(sum((a + b) * v for (a, b), v in counts[d].items()) / n[d], 3) if n[d] else None for d in range(5)}}
+
+
 # ----------------------------------------------------------------------------- CLI
 if __name__ == "__main__":
     from .db import hockey_engine, run_migrations
@@ -457,6 +501,13 @@ if __name__ == "__main__":
         rebuild_coaches(eng)
         refresh_situations(eng)
         print({"games": len(ids), "ok": n_ok})
+    elif cmd == "kernel":
+        # Re-measure goals.LATE_KERNEL (optionally for given seasons); paste the printed table into the model.
+        seasons = [int(s) for s in sys.argv[2:] if s.isdigit()] or None
+        k = late_kernel(eng, seasons=seasons)
+        print({"games": k["games"], "n": k["n"], "mean_late_reg_goals": k["mean_late_reg_goals"]})
+        for d, cells in k["kernel"].items():
+            print(f"    {d}: {{" + ", ".join(f"({a}, {b}): {v:.4f}" for (a, b), v in cells.items()) + "},")
     elif cmd == "coaches":
         print("tenures:", rebuild_coaches(eng))
     else:

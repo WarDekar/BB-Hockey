@@ -8,9 +8,11 @@ scores and period scores to price derivatives from. The model:
 * Regulation goals are independent Poisson(λ_h), Poisson(λ_a), with the
   diagonal (tied regulation scores) inflated by ``draw_inflation`` and the
   matrix renormalised — the diagonal-inflated bivariate Poisson of Karlis &
-  Ntzoufras (2003). Plain independence gives ~17% regulation ties at NHL
-  rates against ~23% observed; score effects (trailing team pressing,
-  leading team sitting back) are the gap.
+  Ntzoufras (2003). Plain independence gives ~17% ties at NHL rates
+  against ~22% observed after 60 minutes (19% at 17:00 of the third);
+  score effects (trailing team pressing, leading team sitting back) are
+  the gap. Under the late kernel the inflation applies at 17:00 (1.20);
+  the tying goals with the net empty are in the kernel.
 * Empty-net goals: a share ``eng_rate`` of one-goal regulation wins become
   two-goal wins and a share ``eng_rate2`` of two-goal wins become three-goal
   wins (the goal counts toward the total too). This is what makes −1.5 cover
@@ -21,6 +23,18 @@ scores and period scores to price derivatives from. The model:
   losses were by three or more. Per game the rate for a lead is the
   *trailing* side's coach's own conversion, shrunk toward the league by
   ``eng_prior_games``, passed in as ``eng`` and kept in the snapshot inputs.
+* Late-game kernel (``late_kernel``, default on): the Poisson pair only
+  runs to 17:00 of the third (``LATE_CUT_S`` before the horn); the last
+  three minutes come from ``LATE_KERNEL``, the measured distribution of
+  regulation goals added after 17:00 given the margin at 17:00 (NHL.com
+  play-by-play, 4,343 finals). That is where the empty-netters, the tying
+  goals with the net empty and the chains (pull, concede, pull again) live,
+  and it replaces the mass shifts above. The coach rates still apply: the
+  trailing coach's conversion relative to the league (``eng_rate`` /
+  ``eng_rate2`` as the reference) moves the kernel's "leader adds one"
+  share by the same odds ratio. The old shift path is kept for
+  ``late_kernel = False`` and validated side by side in
+  ``docs/model/2026-10-20-baseline-validation.md``.
 * Tied after 60: decided in OT with probability ``ot_decided_share``,
   otherwise a shootout. Home wins OT with ``0.5 + ot_skill_k·(p_reg_home −
   p_reg_away)``, the shootout with ``so_skill_k`` likewise (small: 3v3 and
@@ -58,7 +72,7 @@ MARKETS = (
 @dataclass
 class ModelParams:
     max_goals: int = 12
-    draw_inflation: float = 1.45
+    draw_inflation: float = 1.20     # at 17:00 of the third under the late kernel (tie-at-57 ≈ 20%, regulation ties ≈ 22%); 1.45 was the full-game value for late_kernel = False
     eng_rate: float = 0.44        # league: one-goal leads that pick up the empty-netter (PBP 2023-26, 1,625 cases)
     eng_rate2: float = 0.42       # league: two-goal leads that become three (1,500 cases)
     eng_chain: float = 0.18       # of one-goal leads that took the empty-netter, the share that take a second (down 1 late, lost by 2+ → by 3+)
@@ -66,7 +80,8 @@ class ModelParams:
     eng_prior_games: int = 40     # shrinkage weight toward the league for a coach's own rate
     strength_sigma: float = 0.0   # optional mixture on the log rate-ratio; tested at 0.35 on 1,743 finals and rejected (overstates underdog blowouts)
     coach_eng: bool = True        # use the trailing side's coach rates when the benches are known
-    ot_decided_share: float = 0.65
+    late_kernel: bool = True      # last 3:00 of regulation from the measured LATE_KERNEL instead of Poisson tail + ENG shifts
+    ot_decided_share: float = 0.68    # of games tied after 60, decided in OT rather than the shootout (PBP 2023-26: 904 OT games, 290 shootouts)
     ot_skill_k: float = 0.5
     so_skill_k: float = 0.2
     period_shares: Tuple[float, float, float] = (0.30, 0.335, 0.365)
@@ -137,6 +152,85 @@ def _apply_empty_net(m: np.ndarray, eng: Dict[str, float], chain: float = 0.0, r
     return out
 
 
+# Measured from NHL.com play-by-play, 4,343 regular-season + playoff finals 2023-24 → 2026-27 to date
+# (``python -m bb_hockey.pbp kernel`` re-measures). Key: goal margin at 17:00 of the third (4 = four or
+# more). Value: probability of (leader adds, trailer adds) regulation goals after 17:00. Margin 0 pools
+# the two orders as (more, fewer); who scores is split by strength when applied. Cells seen once are
+# dropped and the rest renormalised at apply time.
+LATE_CUT_S = 180
+LATE_KERNEL: Dict[int, Dict[Tuple[int, int], float]] = {
+    0: {(0, 0): 0.8167, (1, 0): 0.1190, (1, 1): 0.0107, (2, 0): 0.0476, (2, 1): 0.0036, (3, 0): 0.0024},
+    1: {(0, 0): 0.3692, (0, 1): 0.1718, (0, 2): 0.0041, (1, 0): 0.3416, (1, 1): 0.0262, (2, 0): 0.0794, (2, 1): 0.0062},
+    2: {(0, 0): 0.2491, (0, 1): 0.1001, (0, 2): 0.0193, (1, 0): 0.5097, (1, 1): 0.0626, (1, 2): 0.0034, (2, 0): 0.0341, (2, 1): 0.0205},
+    3: {(0, 0): 0.6300, (0, 1): 0.0681, (0, 2): 0.0052, (1, 0): 0.2251, (1, 1): 0.0576, (1, 2): 0.0087, (2, 0): 0.0052},
+    4: {(0, 0): 0.8023, (0, 1): 0.1013, (0, 2): 0.0066, (1, 0): 0.0814, (1, 1): 0.0050, (2, 0): 0.0033},
+}
+
+
+def _logit(p: float) -> float:
+    p = min(1 - 1e-6, max(1e-6, p))
+    return float(np.log(p / (1 - p)))
+
+
+def _reweight_kernel(kern: Dict[Tuple[int, int], float], d: int, rate: Optional[float], ref: float) -> Dict[Tuple[int, int], float]:
+    """Move the coach's deviation from the league into the kernel for margin ``d``.
+
+    ``rate`` is the trailing coach's measured conversion (of losses from down ``d`` late, the share by
+    ``d``+1 or more) and ``ref`` the league's under the same definition. The kernel's own conditional
+    (final margin ≥ d+1 given the leader kept at least d) is shifted by the same odds ratio; branches
+    where the trailer tied or won are untouched."""
+    tot = sum(kern.values())
+    kern = {k: v / tot for k, v in kern.items()}
+    if rate is None or abs(rate - ref) < 1e-9:
+        return kern
+    big = {k for k in kern if k[0] - k[1] >= 1}
+    small = {k for k in kern if k[0] - k[1] == 0}
+    pb, ps = sum(kern[k] for k in big), sum(kern[k] for k in small)
+    if pb <= 0 or ps <= 0:
+        return kern
+    c0 = pb / (pb + ps)
+    c = 1.0 / (1.0 + np.exp(-(_logit(c0) + _logit(rate) - _logit(ref))))
+    out = {}
+    for k, v in kern.items():
+        out[k] = v * (c / c0) if k in big else v * ((1 - c) / (1 - c0)) if k in small else v
+    return out
+
+
+def _apply_late_kernel(m: np.ndarray, eng: Dict[str, float], params: "ModelParams", lh: float, la: float) -> np.ndarray:
+    """From the score matrix at 17:00 of the third to the regulation final via ``LATE_KERNEL``."""
+    n = m.shape[0] - 1
+    out = np.zeros_like(m)
+    wh = lh / (lh + la) if (lh + la) > 0 else 0.5
+    k0 = _reweight_kernel(LATE_KERNEL[0], 0, None, 0.0)
+    kern = {d: {} for d in (1, 2, 3, 4)}
+    for d in (1, 2, 3, 4):
+        for side in ("home", "away"):
+            rate = eng.get(f"{side}_lead{d}") if d <= 2 else None
+            ref = params.eng_rate if d == 1 else params.eng_rate2
+            kern[d][side] = _reweight_kernel(LATE_KERNEL[d], d, rate, ref)
+    for h in range(n + 1):
+        for a in range(n + 1):
+            p = m[h, a]
+            if p <= 0:
+                continue
+            d = h - a
+            if d == 0:
+                for (x, y), q in k0.items():
+                    if x == y:
+                        out[min(h + x, n), min(a + y, n)] += p * q
+                    else:
+                        out[min(h + x, n), min(a + y, n)] += p * q * wh
+                        out[min(h + y, n), min(a + x, n)] += p * q * (1 - wh)
+            else:
+                k = kern[min(abs(d), 4)]["home" if d > 0 else "away"]
+                for (ld, tr), q in k.items():
+                    if d > 0:
+                        out[min(h + ld, n), min(a + tr, n)] += p * q
+                    else:
+                        out[min(h + tr, n), min(a + ld, n)] += p * q
+    return out
+
+
 def resolve_eng(params: "ModelParams", eng: Optional[Dict[str, float]] = None) -> Dict[str, float]:
     base = {"home_lead1": params.eng_rate, "away_lead1": params.eng_rate, "home_lead2": params.eng_rate2, "away_lead2": params.eng_rate2}
     if eng:
@@ -162,11 +256,9 @@ class GameModel:
             # Gauss-Hermite with five nodes; the total is held, only the split moves, so this widens margins, not totals.
             self.reg = np.zeros((n + 1, n + 1))
             for z, w in zip(_GH_NODES, _GH_WEIGHTS):
-                self.reg += w * _apply_empty_net(_inflated_matrix(lh * np.exp(sigma * z / 2), la * np.exp(-sigma * z / 2), n, p.draw_inflation), self.eng,
-                                                 chain=getattr(p, "eng_chain", 0.0), rate3=getattr(p, "eng_rate3", 0.0))
+                self.reg += w * self._regulation(lh * np.exp(sigma * z / 2), la * np.exp(-sigma * z / 2))
         else:
-            self.reg = _apply_empty_net(_inflated_matrix(lh, la, n, p.draw_inflation), self.eng,
-                                        chain=getattr(p, "eng_chain", 0.0), rate3=getattr(p, "eng_rate3", 0.0))
+            self.reg = self._regulation(lh, la)
         idx = np.arange(n + 1)
         H, A = np.meshgrid(idx, idx, indexing="ij")
         self.p_reg_home = float(self.reg[H > A].sum())
@@ -197,6 +289,16 @@ class GameModel:
         self.periods = []
         for share in p.period_shares:
             self.periods.append(_inflated_matrix(lh * share, la * share, n, p.period_draw_inflation))
+
+    def _regulation(self, lh: float, la: float) -> np.ndarray:
+        """Regulation score matrix: Poisson pair (diagonal inflated) to 17:00 of the third, then the late-game
+        kernel; or, with ``late_kernel`` off, the full-game Poisson pair with the empty-net mass shifts."""
+        p, n = self.params, self.n
+        if getattr(p, "late_kernel", True):
+            f = 1.0 - LATE_CUT_S / 3600.0
+            return _apply_late_kernel(_inflated_matrix(lh * f, la * f, n, p.draw_inflation), self.eng, p, lh, la)
+        return _apply_empty_net(_inflated_matrix(lh, la, n, p.draw_inflation), self.eng,
+                                chain=getattr(p, "eng_chain", 0.0), rate3=getattr(p, "eng_rate3", 0.0))
 
     # -- distributions ----------------------------------------------------
     def _margin_dist(self, m: np.ndarray) -> Dict[int, float]:
@@ -335,6 +437,7 @@ class GameModel:
             "exp_total": round(sum(k * v for k, v in self.total_full.items()), 4),
             "exp_reg_total": round(sum(k * v for k, v in self.total_reg.items()), 4),
             "eng": {k: round(v, 4) for k, v in self.eng.items()},
+            "late_kernel": bool(getattr(self.params, "late_kernel", True)),
         }
 
 
