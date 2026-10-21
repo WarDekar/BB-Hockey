@@ -66,7 +66,7 @@ coach: pull rate when down 1 / 2 / 3+ inside 3:00, median and IQR of time
 left, scored / tied / empty-netter rates. `GET /pulls/notes` is the cliff
 notes per current bench (puck-line, +2.5 and totals leans from late-deficit
 outcomes), shown as the Pulls tab's default view and as "Bench reads" on the
-Board (`/slate` rows carry `home_bench` / `away_bench`). The handoff for
+Board (`/slate` rows carry `home_bench` / `away_bench`). The Board's matchup is Away / @ / Home columns with fixed-width rotation and code boxes (`TeamTag pad`), bench reads are Away bench / Home bench columns, and the consensus over / under price sits beside the total. The handoff for
 BB-CBB's fouling-down-late analogue is in `docs/handoffs/for-bb-cbb/`. A "pull" is a trailing team's
 goalie-off gap inside the last ten minutes of regulation (inside 6:00, or at
 least 20 s long); the pull rules live in `derive_pulls`. NHL abbreviations
@@ -166,6 +166,20 @@ NHL.com codes (LAK, NJD, SJS, TBL) map to the ESPN ones before lookup.
    was 65.6%; exact 6 at 6.0 lines 11.1% vs 9.4%, was 11.7%) and the
    alternates (fav −2.5 28.1 vs 29.0, dog +2.5 71.9 vs 71.0) at the cost of
    0.6 points on the fav −1.5 (39.3 vs 41.4).
+   **Coach late-goal rate and the baseline-rate fit (2026-10-21 pm):** the
+   trailing coach's "a goal after 17:00" rate (any regulation goal given
+   down 1 / 2 at 17:00, the kernel's own definition; `goal1` / `goal2` in
+   `coach_eng_rates`, keys `*_lead{1,2}_goal` in `inputs.eng.rates`) rakes
+   the kernel's (0,0) cell by its odds ratio against the league's, jointly
+   with the empty-net conversion. The league rate equals 1 − the kernel's
+   (0,0) by construction (63.1% / 75.1%). `bench_refit` (default off) is
+   the other half: the rates are now solved at **league** benches and the
+   coach kernels applied at those rates, so the fair total and, through
+   the tying-goal branch, the ML drift from the market by what the benches
+   do (about ±0.8 points on the total at the line, ±0.7 on the ML across
+   a slate). With `bench_refit` on, the old behaviour: the market ML and
+   total are reproduced with the coach rates, so a bench only reshapes
+   the distribution and the fair total never leaves the line.
    `kernel_pace_k` (0.5) scales the kernel's late goals with
    `(λh+λa)/kernel_pace_ref` (5.69); the PBP cannot measure the elasticity
    (team pace spans ±4%) and the historical set is indifferent between 0

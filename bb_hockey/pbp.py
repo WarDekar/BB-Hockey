@@ -799,11 +799,33 @@ def notes_by_team(engine: Engine, max_age_s: int = 600) -> Dict[str, dict]:
 _eng_cache: dict = {"at": None, "by_team": {}, "league": None}
 
 
+# One row per team-game trailing at 17:00 of the third: the trailing coach, the deficit and the regulation
+# goals (either side) after 17:00. The kernel's own conditioning, so coach rates and league reference agree.
+_LATE_GOAL_SQL = """
+    WITH at1700 AS (
+        SELECT g.id AS game_id, l.away_score, l.home_score
+        FROM nhl_games g
+        LEFT JOIN LATERAL (
+            SELECT away_score, home_score FROM nhl_plays p
+            WHERE p.game_id = g.id AND (p.period < 3 OR (p.period = 3 AND p.elapsed_s <= 1020))
+            ORDER BY p.period DESC, p.elapsed_s DESC, p.sort_order DESC LIMIT 1) l ON true
+        WHERE g.error IS NULL AND g.game_type IN (2, 3)
+    )
+    SELECT CASE WHEN a.home_score < a.away_score THEN g.home_coach ELSE g.away_coach END AS coach,
+           abs(a.home_score - a.away_score) AS d,
+           (g.reg_home + g.reg_away) - (a.home_score + a.away_score) AS late
+    FROM nhl_games g JOIN at1700 a ON a.game_id = g.id
+    WHERE a.home_score IS NOT NULL AND g.reg_home IS NOT NULL AND a.home_score <> a.away_score
+"""
+
+
 def coach_eng_rates(engine: Engine, max_age_s: int = 600) -> dict:
     """Empty-net conversion with the model's definition, per current bench and for the league.
 
     lead1: of team-games down one inside 3:00 that were lost, the share lost by two or more.
     lead2: of team-games down two inside 3:00 that were lost by two or more, the share lost by three or more.
+    goal1 / goal2: of team-games down one / two AT 17:00 of the third (the kernel's definition), the share
+    with at least one more regulation goal by either side (``goals.LATE_KERNEL``'s 1 − (0,0) for the league).
     Counts (k of n) so the caller can shrink toward the league.
     """
     now = datetime.now(timezone.utc)
@@ -814,15 +836,23 @@ def coach_eng_rates(engine: Engine, max_age_s: int = 600) -> dict:
                     FROM pull_situations WHERE 1 = ANY(late_deficits) GROUP BY coach),
              s2 AS (SELECT coach, count(*) FILTER (WHERE final_against - final_for >= 2) AS n, count(*) FILTER (WHERE final_against - final_for >= 3) AS k
                     FROM pull_situations WHERE 2 = ANY(late_deficits) GROUP BY coach)
-        SELECT c.team, c.coach, COALESCE(s1.n, 0) AS n1, COALESCE(s1.k, 0) AS k1, COALESCE(s2.n, 0) AS n2, COALESCE(s2.k, 0) AS k2
+        SELECT c.team, c.coach, COALESCE(s1.n, 0) AS n1, COALESCE(s1.k, 0) AS k1, COALESCE(s2.n, 0) AS n2, COALESCE(s2.k, 0) AS k2,
+               COALESCE(g.n1, 0) AS n1g, COALESCE(g.k1, 0) AS k1g, COALESCE(g.n2, 0) AS n2g, COALESCE(g.k2, 0) AS k2g
         FROM coaches c LEFT JOIN s1 ON s1.coach = c.coach LEFT JOIN s2 ON s2.coach = c.coach
+        LEFT JOIN (SELECT coach, count(*) FILTER (WHERE d = 1) AS n1, count(*) FILTER (WHERE d = 1 AND late >= 1) AS k1,
+                                 count(*) FILTER (WHERE d = 2) AS n2, count(*) FILTER (WHERE d = 2 AND late >= 1) AS k2
+                   FROM (""" + _LATE_GOAL_SQL + """) t GROUP BY coach) g ON g.coach = c.coach
         WHERE c.league = 'NHL' AND c.end_date IS NULL
     """
     league_sql = """
         SELECT (SELECT count(*) FROM pull_situations WHERE 1 = ANY(late_deficits) AND final_against - final_for >= 1) AS n1,
                (SELECT count(*) FROM pull_situations WHERE 1 = ANY(late_deficits) AND final_against - final_for >= 2) AS k1,
                (SELECT count(*) FROM pull_situations WHERE 2 = ANY(late_deficits) AND final_against - final_for >= 2) AS n2,
-               (SELECT count(*) FROM pull_situations WHERE 2 = ANY(late_deficits) AND final_against - final_for >= 3) AS k2
+               (SELECT count(*) FROM pull_situations WHERE 2 = ANY(late_deficits) AND final_against - final_for >= 3) AS k2,
+               (SELECT count(*) FROM (""" + _LATE_GOAL_SQL + """) t WHERE d = 1) AS n1g,
+               (SELECT count(*) FROM (""" + _LATE_GOAL_SQL + """) t WHERE d = 1 AND late >= 1) AS k1g,
+               (SELECT count(*) FROM (""" + _LATE_GOAL_SQL + """) t WHERE d = 2) AS n2g,
+               (SELECT count(*) FROM (""" + _LATE_GOAL_SQL + """) t WHERE d = 2 AND late >= 1) AS k2g
     """
     try:
         with engine.connect() as c:
@@ -854,13 +884,33 @@ def eng_for_game(engine: Engine, home_nhl: Optional[str], away_nhl: Optional[str
         n, k = c[f"n{which}"], c[f"k{which}"]
         return (k + w * L) / (n + w), {"coach": c["coach"], "n": n, "k": k, "raw": (k / n if n else None)}
 
+    G1 = lg["k1g"] / lg["n1g"] if lg.get("n1g") else None
+    G2 = lg["k2g"] / lg["n2g"] if lg.get("n2g") else None
+
+    def shrink_goal(c: Optional[dict], which: int) -> Tuple[Optional[float], Optional[dict]]:
+        G = G1 if which == 1 else G2
+        if G is None:
+            return None, None
+        if not c:
+            return G, None
+        n, k = c.get(f"n{which}g", 0), c.get(f"k{which}g", 0)
+        return (k + w * G) / (n + w), {"coach": c["coach"], "n": n, "k": k, "raw": (k / n if n else None)}
+
     home_c, away_c = cache["by_team"].get(home_nhl), cache["by_team"].get(away_nhl)
     h1, hc1 = shrink(away_c, 1); h2, hc2 = shrink(away_c, 2)   # home leads → away coach pulls
     a1, ac1 = shrink(home_c, 1); a2, ac2 = shrink(home_c, 2)   # away leads → home coach pulls
+    hg1, hcg1 = shrink_goal(away_c, 1); hg2, hcg2 = shrink_goal(away_c, 2)
+    ag1, acg1 = shrink_goal(home_c, 1); ag2, acg2 = shrink_goal(home_c, 2)
+    rates = {"home_lead1": round(h1, 4), "away_lead1": round(a1, 4), "home_lead2": round(h2, 4), "away_lead2": round(a2, 4)}
+    for k, v in (("home_lead1_goal", hg1), ("away_lead1_goal", ag1), ("home_lead2_goal", hg2), ("away_lead2_goal", ag2)):
+        if v is not None:
+            rates[k] = round(v, 4)
     return {
-        "rates": {"home_lead1": round(h1, 4), "away_lead1": round(a1, 4), "home_lead2": round(h2, 4), "away_lead2": round(a2, 4)},
-        "home_coach": {"team": home_nhl, "coach": home_c["coach"] if home_c else None, "lead1": ac1, "lead2": ac2},
-        "away_coach": {"team": away_nhl, "coach": away_c["coach"] if away_c else None, "lead1": hc1, "lead2": hc2},
-        "league": {"lead1": round(L1, 4), "lead2": round(L2, 4), "n1": lg["n1"], "n2": lg["n2"]},
+        "rates": rates,
+        "home_coach": {"team": home_nhl, "coach": home_c["coach"] if home_c else None, "lead1": ac1, "lead2": ac2, "goal1": acg1, "goal2": acg2},
+        "away_coach": {"team": away_nhl, "coach": away_c["coach"] if away_c else None, "lead1": hc1, "lead2": hc2, "goal1": hcg1, "goal2": hcg2},
+        "league": {"lead1": round(L1, 4), "lead2": round(L2, 4), "n1": lg["n1"], "n2": lg["n2"],
+                   "goal1": round(G1, 4) if G1 is not None else None, "goal2": round(G2, 4) if G2 is not None else None,
+                   "n1g": lg.get("n1g"), "n2g": lg.get("n2g")},
         "prior_games": w, "source": "NHL.com play-by-play via pull_situations",
     }

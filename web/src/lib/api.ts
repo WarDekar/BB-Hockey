@@ -35,7 +35,7 @@ export interface Summary {
   eng?: Record<string, number>; puck?: Record<string, number>; baseline?: { lambda_home: number; lambda_away: number; eng: Record<string, number>; p_draw: number; puck: Record<string, number> };
 }
 export interface EngCoach { team: string | null; coach: string | null; lead1: { n: number; k: number; raw: number | null } | null; lead2: { n: number; k: number; raw: number | null } | null }
-export interface EngInputs { rates: { home_lead1: number; away_lead1: number; home_lead2: number; away_lead2: number }; home_coach: EngCoach; away_coach: EngCoach; league: { lead1: number; lead2: number; n1: number; n2: number }; prior_games: number; source: string }
+export interface EngInputs { rates: { home_lead1: number; away_lead1: number; home_lead2: number; away_lead2: number; home_lead1_goal?: number; away_lead1_goal?: number; home_lead2_goal?: number; away_lead2_goal?: number }; home_coach: EngCoach; away_coach: EngCoach; league: { lead1: number; lead2: number; n1: number; n2: number; goal1?: number | null; goal2?: number | null }; prior_games: number; source: string }
 export interface Inputs { p_home: number; total_point: number; p_over: number; total_assumed: boolean; consensus_at: string | null; market: Record<string, { point: number | null; prob: number }>; source?: string; eng?: EngInputs | null }
 export interface Game {
   id: number; espn_game_id: number | null; game_time: string; home_name: string; away_name: string; home_abbr: string | null; away_abbr: string | null;

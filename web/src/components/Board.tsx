@@ -59,7 +59,7 @@ export default function Board({ rows, onOpen }: { rows: SlateRow[]; onOpen: (id:
               <thead>
                 <tr>
                   <Th>Time</Th><Th right>Away</Th><Th className="text-center">@</Th><Th>Home</Th><Th>Status</Th>
-                  <Th right>Fair ML</Th><Th right>Total</Th><Th right>λ home / away</Th>
+                  <Th right>Fair ML</Th><Th right>Total</Th><Th right>Fair O / U</Th><Th right>λ home / away</Th>
                   <Th right>Fav −1.5 base → adj</Th><Th right>Dog +2.5 base → adj</Th><Th right>Draw (60′)</Th>
                   <Th>Away bench</Th><Th>Home bench</Th>
                   <Th right>Edges</Th><Th right>Bets</Th><Th right>P&L</Th><Th right>Priced</Th>
@@ -78,6 +78,7 @@ export default function Board({ rows, onOpen }: { rows: SlateRow[]; onOpen: (id:
                       <Td>{score ? <span className="font-mono text-slate-200">{score}</span> : <Pill tone={g.status === "live" ? "amber" : g.status === "pregame" ? "slate" : "blue"}>{g.status}</Pill>}</Td>
                       <Td right mono title={i ? `consensus home ${pct(i.p_home)} · ${i.consensus_at ?? ""}` : undefined}>{i ? `${fmtAmerican(probToAmerican(i.p_home))} / ${fmtAmerican(probToAmerican(1 - i.p_home))}` : "—"}</Td>
                       <Td right mono title={i ? `over ${pct(i.p_over)}${i.total_assumed ? " (assumed)" : ""}` : undefined}>{i ? <><span className="inline-block w-[3ch] text-left">{i.total_point}</span>{i.total_assumed ? "*" : ""}</> : "—"}</Td>
+                      <Td right mono title={i ? `consensus over ${pct(i.p_over)} (Shin-devigged)` : undefined}>{i && !i.total_assumed ? `${fmtAmerican(probToAmerican(i.p_over))} / ${fmtAmerican(probToAmerican(1 - i.p_over))}` : "—"}</Td>
                       <Td right mono className="text-slate-400">{s ? `${num(s.lambda_home)} / ${num(s.lambda_away)}` : "—"}</Td>
                       <Td right mono title="fair cover probability for the favourite −1.5: league-average benches → these benches">{puckCell(s, i, "m15")}</Td>
                       <Td right mono title="fair cover probability for the underdog +2.5: league-average benches → these benches">{puckCell(s, i, "p25")}</Td>
@@ -96,7 +97,7 @@ export default function Board({ rows, onOpen }: { rows: SlateRow[]; onOpen: (id:
           </div>
         </Panel>
       ))}
-      <p className="px-1 text-[11px] text-slate-500">Fair ML and total are BB-Odds's Shin-devigged consensus (the model's inputs); everything else is the model. * = no total quoted, league default assumed. Away / Home bench are each coach's late-deficit record (Pulls tab): puck-line and +2.5 leans in green (back) or red (fade), totals leans in amber; hover for the numbers. Click a game for the full board.</p>
+      <p className="px-1 text-[11px] text-slate-500">Fair ML, total and O / U are BB-Odds's Shin-devigged consensus (the model's inputs); everything else is the model. * = no total quoted, league default assumed. Away / Home bench are each coach's late-deficit record (Pulls tab): puck-line and +2.5 leans in green (back) or red (fade), totals leans in amber; hover for the numbers. Click a game for the full board.</p>
     </div>
   );
 }

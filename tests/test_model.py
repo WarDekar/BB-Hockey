@@ -120,3 +120,33 @@ def test_kernel_pace_scaling():
     fast, slow = GameModel(3.5, 3.2, p), GameModel(3.5, 3.2, ModelParams(kernel_pace_k=0.0))
     assert abs(fast.reg.sum() - 1.0) < 1e-9
     assert fast.summary()["exp_reg_total"] > slow.summary()["exp_reg_total"]  # more late goals at the same rates
+
+
+def test_kernel_late_goal_reweight():
+    from bb_hockey.model.goals import LATE_KERNEL, GameModel, ModelParams, _reweight_kernel
+    ref = 1.0 - LATE_KERNEL[1][(0, 0)]
+    hot = _reweight_kernel(LATE_KERNEL[1], 1, None, 0.44, 0.80, ref)
+    assert abs(sum(hot.values()) - 1.0) < 1e-9 and hot[(0, 0)] < LATE_KERNEL[1][(0, 0)]
+    both = _reweight_kernel(LATE_KERNEL[1], 1, 0.60, 0.44, 0.80, ref)
+    assert abs(sum(both.values()) - 1.0) < 1e-9
+    big = sum(v for (a, b), v in both.items() if a - b >= 1); small = sum(v for (a, b), v in both.items() if a == b)
+    assert abs(1 - both[(0, 0)] - 0.80 * 0 - (1 - both[(0, 0)])) < 1e-12  # raked: P(any goal) and P(big|big∪small) both moved
+    assert big / (big + small) > 0.6
+    base = GameModel(3.0, 2.6, ModelParams())
+    hot_m = GameModel(3.0, 2.6, ModelParams(), {"away_lead1_goal": 0.85, "away_lead2_goal": 0.90})
+    assert hot_m.summary()["exp_reg_total"] > base.summary()["exp_reg_total"]  # at fixed rates a hot trailing bench adds goals
+
+
+def test_fit_from_inputs_benches_move_the_total():
+    from bb_hockey.model.goals import ModelParams
+    from bb_hockey.pricer import fit_from_inputs
+    base = {"p_home": 0.6, "total_point": 6.0, "p_over": 0.5, "eng": None}
+    hot = {**base, "eng": {"rates": {"home_lead1": 0.44, "away_lead1": 0.44, "home_lead2": 0.42, "away_lead2": 0.42,
+                                     "away_lead1_goal": 0.85, "away_lead2_goal": 0.90}, "league": {"lead1": 0.44, "lead2": 0.42}}}
+    m_base, _ = fit_from_inputs(base, ModelParams(eng_rate=0.44, eng_rate2=0.42))
+    m_hot, s_hot = fit_from_inputs(hot, ModelParams(eng_rate=0.44, eng_rate2=0.42))
+    assert m_hot.prob_for("total", "over", 6.0)[0] > m_base.prob_for("total", "over", 6.0)[0]
+    assert abs(s_hot["baseline"]["lambda_home"] - m_hot.lh) < 1e-3  # same rates as the baseline (summary rounds)
+    m_ref, _ = fit_from_inputs(hot, ModelParams(eng_rate=0.44, eng_rate2=0.42, bench_refit=True))
+    r = m_ref.prob_for("total", "over", 6.0)
+    assert abs(r[0] / (1 - r[1]) - 0.5) < 1e-3  # the old path holds the line (push conditioned out)

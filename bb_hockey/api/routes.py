@@ -219,6 +219,7 @@ class ParamsBody(BaseModel):
     eng_prior_games: Optional[int] = None
     strength_sigma: Optional[float] = None
     coach_eng: Optional[bool] = None
+    bench_refit: Optional[bool] = None
     late_kernel: Optional[bool] = None
     kernel_pace_k: Optional[float] = None
     kernel_pace_ref: Optional[float] = None

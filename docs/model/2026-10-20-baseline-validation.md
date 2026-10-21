@@ -160,6 +160,29 @@ a third of them) moves with pace and the pull-driven share does not. At
 1.0 a 7.0-total coin-flip game moves the favourite −1.5 up 0.75 points
 and a 5.5 game down 0.3; at 0.5, half that.
 
+**The coach's late-goal rate, and where the market sits (added the same
+afternoon).** The bench reads quote "a goal after 17:00" rates, but only
+the empty-net conversion was reaching the model. Now the trailing coach's
+rate of any regulation goal after 17:00 given down one (or two) at 17:00,
+the kernel's own conditioning, rakes the kernel's "nothing happens" cell
+by its odds ratio against the league's 63.1% (down one) and 75.1% (down
+two), jointly with the empty-net shift. The league rates equal 1 − the
+kernel's (0,0) cells by construction. Per game the totals effect is
+P(down one at 17:00, that coach trailing) × his deviation, which the
+kernel computes state by state.
+
+That raised a question the old fit had been hiding: solving (λ_h, λ_a)
+to reproduce the market total *with* the coach rates in place means a
+bench that adds late goals has them taken out of the first 57 minutes,
+and the fair total never leaves the line. The premise of the bench work
+is that the market prices the average game and does not see the benches,
+so the rates are now solved at league benches (the baseline) and the
+coach kernels are applied at those rates (`bench_refit` = 0). The fair
+total then moves off the line by what the benches do: on the 2026-10-21
+slate between −0.4 and +0.8 points at the quoted total, and the
+60-minute ML by up to 0.7 points through the tying-goal branch. The
+alternates move as before. `bench_refit` = 1 restores the held-line fit.
+
 `late_kernel = 0` in Params restores the old path (set `draw_inflation`
 back to 1.45 with it).
 

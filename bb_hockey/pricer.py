@@ -103,13 +103,23 @@ def fit_baseline(inputs: dict, params: ModelParams) -> GameModel:
 def fit_from_inputs(inputs: dict, params: ModelParams, return_base: bool = False):
     """Coach-adjusted model plus, in the summary, the league-baseline puck lines the same inputs imply."""
     eng = (inputs.get("eng") or {}).get("rates")
-    lh, la, diag = fit_lambdas(inputs["p_home"], inputs["total_point"], inputs["p_over"], params, eng)
+    if getattr(params, "bench_refit", False):
+        # Old behaviour: the market's ML and total are reproduced with the coach rates in place, so a bench
+        # that adds late goals takes them out of the first 57 minutes and the fair total never leaves the line.
+        lh, la, diag = fit_lambdas(inputs["p_home"], inputs["total_point"], inputs["p_over"], params, eng)
+        base = fit_baseline(inputs, params)
+    else:
+        # The market prices the league-average game; the benches then move it. Rates are solved at league
+        # empty-net and late-goal rates, and the coach kernels are applied at those rates, so the fair total
+        # (and, through the tying-goal branch, the ML) drift from the market by what the benches do.
+        base_eng = league_eng(inputs, params)
+        lh, la, diag = fit_lambdas(inputs["p_home"], inputs["total_point"], inputs["p_over"], params, base_eng)
+        base = GameModel(lh, la, params, base_eng)
     model = GameModel(lh, la, params, eng)
     summary = model.summary()
     summary.update(diag)
     summary["market_check"] = market_check(model, inputs)
     summary["puck"] = puck_summary(model)
-    base = fit_baseline(inputs, params)
     summary["baseline"] = {"lambda_home": round(base.lh, 4), "lambda_away": round(base.la, 4), "eng": {k: round(v, 4) for k, v in base.eng.items()},
                            "p_draw": round(base.p_draw, 5), "puck": puck_summary(base)}
     return (model, summary, base) if return_base else (model, summary)

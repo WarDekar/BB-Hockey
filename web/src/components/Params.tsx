@@ -14,7 +14,8 @@ const FIELDS: { key: string; label: string; help: string; step: number }[] = [
   { key: "eng_rate3", label: "Empty-net rate, 3-goal leads", help: "Old path only (late kernel off): share of three-goal wins that become four. Measured 0.14. The kernel carries this itself.", step: 0.02 },
   { key: "eng_prior_games", label: "Coach shrinkage (games)", help: "Weight of the league rate when blending a coach's own empty-net record: rate = (k + w·league) / (n + w). 40 ≈ one season of late deficits.", step: 5 },
   { key: "strength_sigma", label: "Strength uncertainty σ", help: "Optional mixture of the log rate-ratio around the fitted one (5-point Gauss-Hermite). Widens both sides' margins. Tested at 0.35 on 1,743 historical finals and rejected: favourites' margins already fit, underdog blowouts were overstated. Leave at 0.", step: 0.05 },
-  { key: "coach_eng", label: "Use coach rates (1/0)", help: "1 = per-game empty-net rates from the trailing side's coach (Pulls tab); 0 = the two league rates above for every game.", step: 1 },
+  { key: "coach_eng", label: "Use coach rates (1/0)", help: "1 = per-game empty-net and late-goal rates from the trailing side's coach (Pulls tab); 0 = the league rates for every game.", step: 1 },
+  { key: "bench_refit", label: "Refit to market with benches (1/0)", help: "0 (default) = the rates are solved at league benches and the coaches then move the fair total, alternates and parity off the market line (the market prices the average game; the benches are what it cannot see). 1 = the market ML and total are reproduced with the coach rates in place, so only the shape moves and the fair total never leaves the line.", step: 1 },
   { key: "ot_decided_share", label: "OT decided share", help: "Of games tied after 60, the share decided in 3v3 OT rather than the shootout. Measured 0.68 (904 OT games, 290 shootouts, 2023-26).", step: 0.05 },
   { key: "ot_skill_k", label: "OT skill k", help: "Home OT win prob = 0.5 + k·(p_reg_home − p_reg_away).", step: 0.1 },
   { key: "so_skill_k", label: "Shootout skill k", help: "Same for the shootout; small — shootouts are close to coin flips.", step: 0.1 },
@@ -37,7 +38,7 @@ export default function Params({ data, reload }: { data: P; reload: () => void }
   const save = async () => {
     setErr(null); setSaved(false);
     const body: Record<string, unknown> = {};
-    for (const k of FIELDS) body[k.key] = k.key === "coach_eng" ? Number(form[k.key]) !== 0 : Number(form[k.key]);
+    for (const k of FIELDS) body[k.key] = ["coach_eng", "bench_refit", "late_kernel"].includes(k.key) ? Number(form[k.key]) !== 0 : Number(form[k.key]);
     body.period_shares = shares.map(Number);
     try { await sendJson("PUT", "/params", body); setSaved(true); reload(); } catch (e) { setErr((e as Error).message); }
   };

@@ -82,6 +82,7 @@ class ModelParams:
     eng_prior_games: int = 40     # shrinkage weight toward the league for a coach's own rate
     strength_sigma: float = 0.0   # optional mixture on the log rate-ratio; tested at 0.35 on 1,743 finals and rejected (overstates underdog blowouts)
     coach_eng: bool = True        # use the trailing side's coach rates when the benches are known
+    bench_refit: bool = False     # True: refit (λh, λa) to the market WITH the coach rates (the total is held, only the shape moves); False: rates fitted at league benches, the coaches then move the fair total and alternates off the market
     late_kernel: bool = True      # last 3:00 of regulation from the measured LATE_KERNEL instead of Poisson tail + ENG shifts
     kernel_pace_k: float = 0.5    # elasticity of the kernel's late goals to game pace: every 'goals happen' cell scales by ((λh+λa)/kernel_pace_ref)^k
     kernel_pace_ref: float = 5.69 # λh+λa of the league-average game the kernel was measured on (equal teams, 5.97 regulation goals)
@@ -119,6 +120,9 @@ def _inflated_matrix(lh: float, la: float, n: int, inflation: float) -> np.ndarr
 
 
 ENG_KEYS = ("home_lead1", "away_lead1", "home_lead2", "away_lead2")
+# The trailing coach's late-goal rate (any regulation goal after 17:00 given down d at 17:00), same
+# orientation: "home_lead1_goal" is the AWAY coach's rate when his team trails by one. Optional.
+GOAL_KEYS = ("home_lead1_goal", "away_lead1_goal", "home_lead2_goal", "away_lead2_goal")
 _GH_NODES, _GH_WEIGHTS = np.polynomial.hermite_e.hermegauss(5)
 _GH_WEIGHTS = _GH_WEIGHTS / _GH_WEIGHTS.sum()
 
@@ -176,27 +180,47 @@ def _logit(p: float) -> float:
     return float(np.log(p / (1 - p)))
 
 
-def _reweight_kernel(kern: Dict[Tuple[int, int], float], d: int, rate: Optional[float], ref: float) -> Dict[Tuple[int, int], float]:
-    """Move the coach's deviation from the league into the kernel for margin ``d``.
+def _reweight_kernel(kern: Dict[Tuple[int, int], float], d: int, rate: Optional[float], ref: float,
+                     goal_rate: Optional[float] = None, goal_ref: Optional[float] = None) -> Dict[Tuple[int, int], float]:
+    """Move the trailing coach's deviations from the league into the kernel for margin ``d``.
 
-    ``rate`` is the trailing coach's measured conversion (of losses from down ``d`` late, the share by
-    ``d``+1 or more) and ``ref`` the league's under the same definition. The kernel's own conditional
+    ``rate`` is the coach's measured empty-net conversion (of losses from down ``d`` late, the share by
+    ``d``+1 or more) and ``ref`` the league's under the same definition: the kernel's own conditional
     (final margin ≥ d+1 given the leader kept at least d) is shifted by the same odds ratio; branches
-    where the trailer tied or won are untouched."""
+    where the trailer tied or won are untouched. ``goal_rate`` is the coach's late-goal rate (any
+    regulation goal after 17:00 given down ``d`` at 17:00) against ``goal_ref`` (the league's, which is
+    1 − the kernel's own (0,0) cell): the "nothing happens" cell is shifted by that odds ratio. With
+    both, the two shifts are alternated to a joint fit (each is a one-dimensional raking step)."""
     tot = sum(kern.values())
     kern = {k: v / tot for k, v in kern.items()}
-    if rate is None or abs(rate - ref) < 1e-9:
+    do_eng = rate is not None and abs(rate - ref) >= 1e-9
+    do_goal = goal_rate is not None and goal_ref is not None and 0 < goal_ref < 1 and abs(goal_rate - goal_ref) >= 1e-9
+    if not do_eng and not do_goal:
         return kern
     big = {k for k in kern if k[0] - k[1] >= 1}
     small = {k for k in kern if k[0] - k[1] == 0}
-    pb, ps = sum(kern[k] for k in big), sum(kern[k] for k in small)
-    if pb <= 0 or ps <= 0:
-        return kern
-    c0 = pb / (pb + ps)
-    c = 1.0 / (1.0 + np.exp(-(_logit(c0) + _logit(rate) - _logit(ref))))
-    out = {}
-    for k, v in kern.items():
-        out[k] = v * (c / c0) if k in big else v * ((1 - c) / (1 - c0)) if k in small else v
+    pb0, ps0 = sum(kern[k] for k in big), sum(kern[k] for k in small)
+    c_eng = None
+    if do_eng and pb0 > 0 and ps0 > 0:
+        c_eng = 1.0 / (1.0 + np.exp(-(_logit(pb0 / (pb0 + ps0)) + _logit(rate) - _logit(ref))))
+    g0 = 1.0 - kern.get((0, 0), 0.0)
+    c_goal = None
+    if do_goal and 0 < g0 < 1:
+        c_goal = 1.0 / (1.0 + np.exp(-(_logit(g0) + _logit(goal_rate) - _logit(goal_ref))))
+    out = dict(kern)
+    for _ in range(12 if (c_eng is not None and c_goal is not None) else 1):
+        if c_goal is not None:
+            p00 = out.get((0, 0), 0.0)
+            rest = 1.0 - p00
+            if 0 < rest < 1:
+                for k in out:
+                    out[k] = out[k] * ((1 - c_goal) / p00) if k == (0, 0) else out[k] * (c_goal / rest)
+        if c_eng is not None:
+            pb, ps = sum(out[k] for k in big), sum(out[k] for k in small)
+            if pb > 0 and ps > 0:
+                c0 = pb / (pb + ps)
+                for k in out:
+                    out[k] = out[k] * (c_eng / c0) if k in big else out[k] * ((1 - c_eng) / (1 - c0)) if k in small else out[k]
     return out
 
 
@@ -230,7 +254,9 @@ def _apply_late_kernel(m: np.ndarray, eng: Dict[str, float], params: "ModelParam
         for side in ("home", "away"):
             rate = eng.get(f"{side}_lead{d}") if d <= 2 else None
             ref = params.eng_rate if d == 1 else params.eng_rate2
-            kern[d][side] = _pace_kernel(_reweight_kernel(LATE_KERNEL[d], d, rate, ref), pace)
+            goal = eng.get(f"{side}_lead{d}_goal") if d <= 2 else None
+            goal_ref = 1.0 - LATE_KERNEL[d].get((0, 0), 0.0)
+            kern[d][side] = _pace_kernel(_reweight_kernel(LATE_KERNEL[d], d, rate, ref, goal, goal_ref), pace)
     for h in range(n + 1):
         for a in range(n + 1):
             p = m[h, a]
@@ -257,7 +283,7 @@ def _apply_late_kernel(m: np.ndarray, eng: Dict[str, float], params: "ModelParam
 def resolve_eng(params: "ModelParams", eng: Optional[Dict[str, float]] = None) -> Dict[str, float]:
     base = {"home_lead1": params.eng_rate, "away_lead1": params.eng_rate, "home_lead2": params.eng_rate2, "away_lead2": params.eng_rate2}
     if eng:
-        for k in ENG_KEYS:
+        for k in ENG_KEYS + GOAL_KEYS:
             if eng.get(k) is not None:
                 base[k] = float(eng[k])
     return base
