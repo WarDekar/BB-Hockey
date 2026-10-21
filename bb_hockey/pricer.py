@@ -39,7 +39,7 @@ def save_params(engine: Engine, params: ModelParams) -> None:
         """), {"v": json.dumps(params.to_dict())})
 
 
-def build_inputs(cons: Dict[tuple, dict], params: ModelParams, method: Optional[str] = None) -> Optional[dict]:
+def build_inputs(cons: Dict[tuple, dict], params: ModelParams, method: Optional[str] = None, eng: Optional[dict] = None) -> Optional[dict]:
     """Fair ML + fair total from the consensus rows, plus the market's own P1 fairs as diagnostics."""
     method = method or settings.devig_method
     h2h = cons.get(("h2h", "game"))
@@ -59,6 +59,7 @@ def build_inputs(cons: Dict[tuple, dict], params: ModelParams, method: Optional[
         "total_assumed": assumed, "devig": method,
         "consensus_at": max(s for s in stamps if s).isoformat() if any(stamps) else None,
         "market": {},
+        "eng": eng,   # per-game empty-net rates from the benches (pbp.eng_for_game), None → ModelParams defaults
     }
     sp = cons.get(("spreads", "game"))
     if sp and sp.get("home_price") is not None:
@@ -73,8 +74,9 @@ def build_inputs(cons: Dict[tuple, dict], params: ModelParams, method: Optional[
 
 
 def fit_from_inputs(inputs: dict, params: ModelParams) -> Tuple[GameModel, dict]:
-    lh, la, diag = fit_lambdas(inputs["p_home"], inputs["total_point"], inputs["p_over"], params)
-    model = GameModel(lh, la, params)
+    eng = (inputs.get("eng") or {}).get("rates")
+    lh, la, diag = fit_lambdas(inputs["p_home"], inputs["total_point"], inputs["p_over"], params, eng)
+    model = GameModel(lh, la, params, eng)
     summary = model.summary()
     summary.update(diag)
     summary["market_check"] = market_check(model, inputs)
@@ -108,7 +110,8 @@ def market_check(model: GameModel, inputs: dict) -> dict:
 
 def model_from_snapshot(snapshot: dict) -> GameModel:
     s = snapshot["summary"]
-    return GameModel(s["lambda_home"], s["lambda_away"], ModelParams.from_dict(snapshot.get("params")))
+    eng = ((snapshot.get("inputs") or {}).get("eng") or {}).get("rates")
+    return GameModel(s["lambda_home"], s["lambda_away"], ModelParams.from_dict(snapshot.get("params")), eng)
 
 
 def upsert_game(c: Connection, g: dict) -> None:
@@ -149,7 +152,8 @@ def _inputs_moved(prev: Optional[dict], new: dict) -> bool:
     pi = prev["inputs"]
     return (abs(pi.get("p_home", 0) - new["p_home"]) > INPUT_TOL
             or abs(pi.get("p_over", 0) - new["p_over"]) > INPUT_TOL
-            or pi.get("total_point") != new["total_point"])
+            or pi.get("total_point") != new["total_point"]
+            or (pi.get("eng") or {}).get("rates") != (new.get("eng") or {}).get("rates"))
 
 
 def write_snapshot(c: Connection, game_id: int, kind: str, inputs: dict, params: ModelParams,
@@ -162,9 +166,9 @@ def write_snapshot(c: Connection, game_id: int, kind: str, inputs: dict, params:
     return int(row[0])
 
 
-def price_game(c: Connection, game: dict, cons: Dict[tuple, dict], params: ModelParams) -> Optional[Tuple[int, GameModel, dict, bool]]:
+def price_game(c: Connection, game: dict, cons: Dict[tuple, dict], params: ModelParams, eng: Optional[dict] = None) -> Optional[Tuple[int, GameModel, dict, bool]]:
     """Fit and (maybe) snapshot one game. Returns (snapshot_id, model, inputs, fresh)."""
-    inputs = build_inputs(cons, params)
+    inputs = build_inputs(cons, params, eng=eng)
     if inputs is None:
         return None
     prev = latest_snapshot(c, game["id"], kind="live")

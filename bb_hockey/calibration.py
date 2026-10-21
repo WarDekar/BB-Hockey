@@ -41,7 +41,8 @@ def by_family(engine: Engine) -> List[dict]:
     for r in rows:
         fam = FAMILIES.get(r["market"], r["market"])
         o = out.setdefault(fam, {"family": fam, "n": 0, "sum_prob": 0.0, "sum_hit": 0.0, "sum_brier": 0.0})
-        o["n"] += r["n"]; o["sum_prob"] += r["mean_prob"] * r["n"]; o["sum_hit"] += r["hit"] * r["n"]; o["sum_brier"] += r["brier"] * r["n"]
+        n = int(r["n"])
+        o["n"] += n; o["sum_prob"] += float(r["mean_prob"]) * n; o["sum_hit"] += float(r["hit"]) * n; o["sum_brier"] += float(r["brier"]) * n
     res = []
     for o in out.values():
         n = o["n"]

@@ -9,11 +9,12 @@ from typing import Optional, Tuple
 from sqlalchemy import text
 from sqlalchemy.engine import Connection, Engine
 
-from . import espn, odds_reader
+from . import espn, odds_reader, pbp
 from .edges import market_key
 from .model.goals import GameModel, ModelParams
 from .model.odds_math import american_to_decimal
 from .paper import pnl_for
+from .teams import nhl_abbr
 from .pricer import build_inputs, fit_from_inputs, latest_snapshot, model_from_snapshot, write_snapshot
 
 logger = logging.getLogger(__name__)
@@ -106,7 +107,8 @@ def closing_model(odds: Engine, c: Connection, game: dict, params: ModelParams) 
     if existing:
         return model_from_snapshot(existing), existing, "closing_snapshot"
     cons = odds_reader.closing_consensus(odds, game["id"], game["game_time"])
-    inputs = build_inputs(cons, params) if cons else None
+    eng = pbp.eng_for_game(c.engine, nhl_abbr(game.get("home_abbr")), nhl_abbr(game.get("away_abbr")), params) if cons else None
+    inputs = build_inputs(cons, params, eng=eng) if cons else None
     if inputs:
         model, summary = fit_from_inputs(inputs, params)
         inputs["source"] = "main.odds consensus close"

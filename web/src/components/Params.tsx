@@ -5,7 +5,10 @@ import { Button, ErrorBox, Panel } from "./Primitives";
 
 const FIELDS: { key: string; label: string; help: string; step: number }[] = [
   { key: "draw_inflation", label: "Draw inflation", help: "Multiplier on tied regulation scores before renormalising (score effects). 1.0 = independent Poisson (~17% ties); 1.45 ≈ 23%.", step: 0.05 },
-  { key: "eng_rate", label: "Empty-net rate", help: "Share of one-goal regulation wins that become two-goal wins (the ENG counts on the total). Drives −1.5.", step: 0.02 },
+  { key: "eng_rate", label: "Empty-net rate, 1-goal leads", help: "League fallback: share of one-goal regulation wins that become two-goal wins (the ENG counts on the total). Measured 0.44 from NHL.com play-by-play 2023-26. Per game the trailing coach's own rate is used when the benches are known.", step: 0.02 },
+  { key: "eng_rate2", label: "Empty-net rate, 2-goal leads", help: "League fallback: share of two-goal wins that become three-goal wins. Measured 0.42. Drives the ±2.5 alternates.", step: 0.02 },
+  { key: "eng_prior_games", label: "Coach shrinkage (games)", help: "Weight of the league rate when blending a coach's own empty-net record: rate = (k + w·league) / (n + w). 40 ≈ one season of late deficits.", step: 5 },
+  { key: "coach_eng", label: "Use coach rates (1/0)", help: "1 = per-game empty-net rates from the trailing side's coach (Pulls tab); 0 = the two league rates above for every game.", step: 1 },
   { key: "ot_decided_share", label: "OT decided share", help: "Of games tied after 60, the share decided in 3v3 OT rather than the shootout.", step: 0.05 },
   { key: "ot_skill_k", label: "OT skill k", help: "Home OT win prob = 0.5 + k·(p_reg_home − p_reg_away).", step: 0.1 },
   { key: "so_skill_k", label: "Shootout skill k", help: "Same for the shootout; small — shootouts are close to coin flips.", step: 0.1 },
@@ -21,14 +24,14 @@ export default function Params({ data, reload }: { data: P; reload: () => void }
   const [saved, setSaved] = useState(false);
   useEffect(() => {
     const f: Record<string, string> = {};
-    for (const k of FIELDS) f[k.key] = String(data.params[k.key]);
+    for (const k of FIELDS) f[k.key] = String(typeof data.params[k.key] === "boolean" ? (data.params[k.key] ? 1 : 0) : data.params[k.key]);
     setForm(f);
     setShares((data.params.period_shares as number[]).map(String));
   }, [data]);
   const save = async () => {
     setErr(null); setSaved(false);
     const body: Record<string, unknown> = {};
-    for (const k of FIELDS) body[k.key] = Number(form[k.key]);
+    for (const k of FIELDS) body[k.key] = k.key === "coach_eng" ? Number(form[k.key]) !== 0 : Number(form[k.key]);
     body.period_shares = shares.map(Number);
     try { await sendJson("PUT", "/params", body); setSaved(true); reload(); } catch (e) { setErr((e as Error).message); }
   };

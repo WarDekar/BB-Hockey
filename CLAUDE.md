@@ -63,7 +63,11 @@ their own `source`). Backfilled 2023-24, 2024-25, 2025-26 and 2026-27 to date;
 the worker's `pbp` job ingests new finals every 30 min (`POST
 /hockey/api/run/pbp` forces it). The Pulls tab aggregates `GET /pulls` per
 coach: pull rate when down 1 / 2 / 3+ inside 3:00, median and IQR of time
-left, scored / tied / empty-netter rates. A "pull" is a trailing team's
+left, scored / tied / empty-netter rates. `GET /pulls/notes` is the cliff
+notes per current bench (puck-line, +2.5 and totals leans from late-deficit
+outcomes), shown as the Pulls tab's default view and as "Bench reads" on the
+Board (`/slate` rows carry `home_bench` / `away_bench`). The handoff for
+BB-CBB's fouling-down-late analogue is in `docs/handoffs/for-bb-cbb/`. A "pull" is a trailing team's
 goalie-off gap inside the last ten minutes of regulation (inside 6:00, or at
 least 20 s long); the pull rules live in `derive_pulls`. NHL abbreviations
 (LAK, NJD, SJS, TBL, UTA) differ from the ESPN ones in `teams.py`.
@@ -99,9 +103,16 @@ least 20 s long); the pull rules live in `derive_pulls`. NHL abbreviations
    has accounts at (BB-Betting scrapes Paradise), so they are shown; anything
    above `max_edge` (20%) is treated as a stale/mis-mapped quote and not
    auto-papered.
-6. **Model priors** (`ModelParams`): draw inflation 1.45, ENG rate 0.28, OT
-   decided share 0.65, period shares 0.30/0.335/0.365. The Calibration tab
-   compares realised rates to these; change them in Params when the sample says so.
+6. **Model priors** (`ModelParams`): draw inflation 1.45, OT decided share
+   0.65, period shares 0.30/0.335/0.365. The Calibration tab compares
+   realised rates to these; change them in Params when the sample says so.
+   **Empty-net rates are measured, not priors (2026-10-20):** of one-goal
+   leads 0.44 pick up the empty-netter, of two-goal leads 0.42 become three
+   (NHL.com PBP, 1,625 / 1,500 cases). Per game the rate for a HOME lead is
+   the AWAY coach's own conversion (he pulls), shrunk to the league with
+   `eng_prior_games` = 40, via `pbp.eng_for_game`; the rates ride in the
+   snapshot `inputs.eng` so re-pricing, the closing model and CLV agree.
+   `coach_eng = 0` in Params falls back to the two league rates.
 
 ## Key files
 
@@ -137,10 +148,10 @@ least 20 s long); the pull rules live in `derive_pulls`. NHL abbreviations
    markets are fair-only; if BB-Odds adds them, extend `edges.market_key`.
 4. **Calibration-driven priors**: after a few hundred finals, refit
    `draw_inflation`, `eng_rate`, period shares from the Calibration tab.
-   The `goalie_pulls` table now gives a per-coach, per-deficit empty-net
-   rate: the next model step is to replace the global `eng_rate` with it
-   (coach of the trailing side × deficit × time), which is what moves the
-   ±1.5 puck line and the +2.5 alternates.
+   Done 2026-10-20 for the empty-net rates (see Assumptions 6). Next: let
+   the Calibration tab's puck / alt-line families confirm the 0.44 / 0.42
+   league rates and the coach blend as finals accumulate; `coach_eng = 0`
+   is the A/B switch.
 5. Portal/PORTS.md status flip is in `docs/handoffs/for-brandos-world/`.
 6. **Fallback anchors when BB-Odds has no NHL consensus** (DonBest subscription
    is expired; NHL rows currently come from the OddsLogic feed). The umbrella

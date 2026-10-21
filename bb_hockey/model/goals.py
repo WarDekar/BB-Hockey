@@ -12,9 +12,15 @@ scores and period scores to price derivatives from. The model:
   rates against ~23% observed; score effects (trailing team pressing,
   leading team sitting back) are the gap.
 * Empty-net goals: a share ``eng_rate`` of one-goal regulation wins become
-  two-goal wins (the goal counts toward the total too). This is what makes
-  −1.5 cover more often than a bare Poisson says and is the single most
-  important correction for puck lines.
+  two-goal wins and a share ``eng_rate2`` of two-goal wins become three-goal
+  wins (the goal counts toward the total too). This is what makes −1.5 cover
+  more often than a bare Poisson says and is the single most important
+  correction for puck lines and the ±2.5 alternates. The rates are measured
+  from NHL.com play-by-play (``pbp.coach_eng_rates``): of teams down one
+  inside 3:00 that lost, 44% lost by two or more; down two, 42% of the
+  losses were by three or more. Per game the rate for a lead is the
+  *trailing* side's coach's own conversion, shrunk toward the league by
+  ``eng_prior_games``, passed in as ``eng`` and kept in the snapshot inputs.
 * Tied after 60: decided in OT with probability ``ot_decided_share``,
   otherwise a shootout. Home wins OT with ``0.5 + ot_skill_k·(p_reg_home −
   p_reg_away)``, the shootout with ``so_skill_k`` likewise (small: 3v3 and
@@ -53,7 +59,10 @@ MARKETS = (
 class ModelParams:
     max_goals: int = 12
     draw_inflation: float = 1.45
-    eng_rate: float = 0.28
+    eng_rate: float = 0.44        # league: one-goal leads that pick up the empty-netter (PBP 2023-26, 1,625 cases)
+    eng_rate2: float = 0.42       # league: two-goal leads that become three (1,500 cases)
+    eng_prior_games: int = 40     # shrinkage weight toward the league for a coach's own rate
+    coach_eng: bool = True        # use the trailing side's coach rates when the benches are known
     ot_decided_share: float = 0.65
     ot_skill_k: float = 0.5
     so_skill_k: float = 0.2
@@ -87,35 +96,49 @@ def _inflated_matrix(lh: float, la: float, n: int, inflation: float) -> np.ndarr
     return m
 
 
-def _apply_empty_net(m: np.ndarray, rate: float) -> np.ndarray:
-    """Move ``rate`` of the mass on one-goal regulation wins to two-goal wins."""
-    if rate <= 0:
-        return m
+ENG_KEYS = ("home_lead1", "away_lead1", "home_lead2", "away_lead2")
+
+
+def _apply_empty_net(m: np.ndarray, eng: Dict[str, float]) -> np.ndarray:
+    """Move empty-net mass: a share of one-goal regulation wins become two-goal wins and a
+    share of two-goal wins become three-goal wins. ``eng`` is keyed by who leads: the rate
+    for a home lead is the away coach's conversion (he is the one pulling)."""
     n = m.shape[0] - 1
     out = m.copy()
     for h in range(n + 1):
         for a in range(n + 1):
-            if h - a == 1 and h + 1 <= n:
-                mv = m[h, a] * rate
-                out[h, a] -= mv
-                out[h + 1, a] += mv
-            elif a - h == 1 and a + 1 <= n:
-                mv = m[h, a] * rate
-                out[h, a] -= mv
-                out[h, a + 1] += mv
+            d = h - a
+            if d == 1 and h + 1 <= n:
+                mv = m[h, a] * eng["home_lead1"]; out[h, a] -= mv; out[h + 1, a] += mv
+            elif d == -1 and a + 1 <= n:
+                mv = m[h, a] * eng["away_lead1"]; out[h, a] -= mv; out[h, a + 1] += mv
+            elif d == 2 and h + 1 <= n:
+                mv = m[h, a] * eng["home_lead2"]; out[h, a] -= mv; out[h + 1, a] += mv
+            elif d == -2 and a + 1 <= n:
+                mv = m[h, a] * eng["away_lead2"]; out[h, a] -= mv; out[h, a + 1] += mv
     return out
+
+
+def resolve_eng(params: "ModelParams", eng: Optional[Dict[str, float]] = None) -> Dict[str, float]:
+    base = {"home_lead1": params.eng_rate, "away_lead1": params.eng_rate, "home_lead2": params.eng_rate2, "away_lead2": params.eng_rate2}
+    if eng:
+        for k in ENG_KEYS:
+            if eng.get(k) is not None:
+                base[k] = float(eng[k])
+    return base
 
 
 class GameModel:
     """Score distributions for one game at rates (λ_h, λ_a)."""
 
-    def __init__(self, lh: float, la: float, params: Optional[ModelParams] = None):
+    def __init__(self, lh: float, la: float, params: Optional[ModelParams] = None, eng: Optional[Dict[str, float]] = None):
         self.params = params or ModelParams()
         self.lh, self.la = float(lh), float(la)
         p = self.params
         n = p.max_goals
         self.n = n
-        self.reg = _apply_empty_net(_inflated_matrix(lh, la, n, p.draw_inflation), p.eng_rate)
+        self.eng = resolve_eng(p, eng)
+        self.reg = _apply_empty_net(_inflated_matrix(lh, la, n, p.draw_inflation), self.eng)
         idx = np.arange(n + 1)
         H, A = np.meshgrid(idx, idx, indexing="ij")
         self.p_reg_home = float(self.reg[H > A].sum())
@@ -283,6 +306,7 @@ class GameModel:
             "p_tie_home": round(self.p_tie_home, 5),
             "exp_total": round(sum(k * v for k, v in self.total_full.items()), 4),
             "exp_reg_total": round(sum(k * v for k, v in self.total_reg.items()), 4),
+            "eng": {k: round(v, 4) for k, v in self.eng.items()},
         }
 
 
@@ -293,7 +317,7 @@ def over_prob_conditional(model: GameModel, point: float) -> float:
 
 
 def fit_lambdas(p_home: float, total_point: float, p_over: float,
-                params: Optional[ModelParams] = None) -> Tuple[float, float, dict]:
+                params: Optional[ModelParams] = None, eng: Optional[Dict[str, float]] = None) -> Tuple[float, float, dict]:
     """Solve (λ_h, λ_a) so the model reproduces the fair ML and the fair total.
 
     Returns (λ_h, λ_a, diagnostics). Two equations, two unknowns; solved in
@@ -305,7 +329,7 @@ def fit_lambdas(p_home: float, total_point: float, p_over: float,
     p_over = min(0.98, max(0.02, float(p_over)))
 
     def resid(x):
-        m = GameModel(np.exp(x[0]), np.exp(x[1]), params)
+        m = GameModel(np.exp(x[0]), np.exp(x[1]), params, eng)
         return [m.p_home - p_home, over_prob_conditional(m, total_point) - p_over]
 
     # Start from the total split by a crude strength tilt.
@@ -314,7 +338,7 @@ def fit_lambdas(p_home: float, total_point: float, p_over: float,
     x0 = [np.log(max(0.3, base + tilt)), np.log(max(0.3, base - tilt))]
     sol = least_squares(resid, x0, bounds=([np.log(0.2)] * 2, [np.log(8.0)] * 2), xtol=1e-10, ftol=1e-10)
     lh, la = float(np.exp(sol.x[0])), float(np.exp(sol.x[1]))
-    m = GameModel(lh, la, params)
+    m = GameModel(lh, la, params, eng)
     diag = {
         "resid_p_home": round(m.p_home - p_home, 6),
         "resid_p_over": round(over_prob_conditional(m, total_point) - p_over, 6),

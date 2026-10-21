@@ -742,3 +742,74 @@ def notes_by_team(engine: Engine, max_age_s: int = 600) -> Dict[str, dict]:
             logger.warning("coach notes unavailable for the slate: %s", e)
             _notes_cache.update(at=now)
     return _notes_cache["by_team"]
+
+
+# ----------------------------------------------------------------------------- empty-net rates for the model
+_eng_cache: dict = {"at": None, "by_team": {}, "league": None}
+
+
+def coach_eng_rates(engine: Engine, max_age_s: int = 600) -> dict:
+    """Empty-net conversion with the model's definition, per current bench and for the league.
+
+    lead1: of team-games down one inside 3:00 that were lost, the share lost by two or more.
+    lead2: of team-games down two inside 3:00 that were lost by two or more, the share lost by three or more.
+    Counts (k of n) so the caller can shrink toward the league.
+    """
+    now = datetime.now(timezone.utc)
+    if _eng_cache["at"] is not None and (now - _eng_cache["at"]).total_seconds() < max_age_s:
+        return _eng_cache
+    sql = """
+        WITH s1 AS (SELECT coach, count(*) FILTER (WHERE final_against - final_for >= 1) AS n, count(*) FILTER (WHERE final_against - final_for >= 2) AS k
+                    FROM pull_situations WHERE 1 = ANY(late_deficits) GROUP BY coach),
+             s2 AS (SELECT coach, count(*) FILTER (WHERE final_against - final_for >= 2) AS n, count(*) FILTER (WHERE final_against - final_for >= 3) AS k
+                    FROM pull_situations WHERE 2 = ANY(late_deficits) GROUP BY coach)
+        SELECT c.team, c.coach, COALESCE(s1.n, 0) AS n1, COALESCE(s1.k, 0) AS k1, COALESCE(s2.n, 0) AS n2, COALESCE(s2.k, 0) AS k2
+        FROM coaches c LEFT JOIN s1 ON s1.coach = c.coach LEFT JOIN s2 ON s2.coach = c.coach
+        WHERE c.league = 'NHL' AND c.end_date IS NULL
+    """
+    league_sql = """
+        SELECT (SELECT count(*) FROM pull_situations WHERE 1 = ANY(late_deficits) AND final_against - final_for >= 1) AS n1,
+               (SELECT count(*) FROM pull_situations WHERE 1 = ANY(late_deficits) AND final_against - final_for >= 2) AS k1,
+               (SELECT count(*) FROM pull_situations WHERE 2 = ANY(late_deficits) AND final_against - final_for >= 2) AS n2,
+               (SELECT count(*) FROM pull_situations WHERE 2 = ANY(late_deficits) AND final_against - final_for >= 3) AS k2
+    """
+    try:
+        with engine.connect() as c:
+            by_team = {r["team"]: {k: (int(v) if k != "coach" else v) for k, v in dict(r).items() if k != "team"} for r in c.execute(text(sql)).mappings()}
+            lg = dict(c.execute(text(league_sql)).mappings().first())
+        league = {k: int(v) for k, v in lg.items()}
+        _eng_cache.update(at=now, by_team=by_team, league=league if league["n1"] else None)
+    except Exception as e:  # noqa: BLE001
+        logger.warning("coach empty-net rates unavailable: %s", e)
+        _eng_cache.update(at=now)
+    return _eng_cache
+
+
+def eng_for_game(engine: Engine, home_nhl: Optional[str], away_nhl: Optional[str], params) -> Optional[dict]:
+    """The model's per-game empty-net rates: the rate for a HOME lead is the AWAY coach's conversion (he pulls)."""
+    if not getattr(params, "coach_eng", True):
+        return None
+    cache = coach_eng_rates(engine)
+    lg = cache.get("league")
+    if not lg:
+        return None
+    L1, L2 = lg["k1"] / lg["n1"], (lg["k2"] / lg["n2"] if lg["n2"] else params.eng_rate2)
+    w = float(getattr(params, "eng_prior_games", 40))
+
+    def shrink(c: Optional[dict], which: int) -> Tuple[float, Optional[dict]]:
+        L = L1 if which == 1 else L2
+        if not c:
+            return L, None
+        n, k = c[f"n{which}"], c[f"k{which}"]
+        return (k + w * L) / (n + w), {"coach": c["coach"], "n": n, "k": k, "raw": (k / n if n else None)}
+
+    home_c, away_c = cache["by_team"].get(home_nhl), cache["by_team"].get(away_nhl)
+    h1, hc1 = shrink(away_c, 1); h2, hc2 = shrink(away_c, 2)   # home leads → away coach pulls
+    a1, ac1 = shrink(home_c, 1); a2, ac2 = shrink(home_c, 2)   # away leads → home coach pulls
+    return {
+        "rates": {"home_lead1": round(h1, 4), "away_lead1": round(a1, 4), "home_lead2": round(h2, 4), "away_lead2": round(a2, 4)},
+        "home_coach": {"team": home_nhl, "coach": home_c["coach"] if home_c else None, "lead1": ac1, "lead2": ac2},
+        "away_coach": {"team": away_nhl, "coach": away_c["coach"] if away_c else None, "lead1": hc1, "lead2": hc2},
+        "league": {"lead1": round(L1, 4), "lead2": round(L2, 4), "n1": lg["n1"], "n2": lg["n2"]},
+        "prior_games": w, "source": "NHL.com play-by-play via pull_situations",
+    }

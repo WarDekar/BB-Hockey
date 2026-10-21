@@ -47,6 +47,8 @@ export default function GameDetail({ detail, reload, minEdge }: { detail: Detail
         {!snapshot ? <Empty>No pricing snapshot yet — the worker prices a game once BB-Odds has a consensus moneyline for it.</Empty> : (
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-8">
             <Stat label="Consensus home" value={pct(i!.p_home)} sub={fmtAmerican(i!.p_home >= 0.5 ? (-100 * i!.p_home) / (1 - i!.p_home) : (100 * (1 - i!.p_home)) / i!.p_home)} />
+            {i!.eng?.rates && <Stat label="Empty-net rates" value={`${pct(i!.eng.rates.home_lead1, 0)} / ${pct(i!.eng.rates.away_lead1, 0)}`}
+              sub={`home lead (${i!.eng.away_coach.coach ?? "?"} pulls) / away lead (${i!.eng.home_coach.coach ?? "?"} pulls) · 2-goal ${pct(i!.eng.rates.home_lead2, 0)} / ${pct(i!.eng.rates.away_lead2, 0)} · lg ${pct(i!.eng.league.lead1, 0)} / ${pct(i!.eng.league.lead2, 0)}`} />}
             <Stat label="Consensus total" value={`${i!.total_point}${i!.total_assumed ? "*" : ""}`} sub={`over ${pct(i!.p_over)}`} />
             <Stat label="λ home / away" value={`${num(s!.lambda_home)} / ${num(s!.lambda_away)}`} sub={`exp ${num(s!.exp_total)} (reg ${num(s!.exp_reg_total)})`} />
             <Stat label="60-min draw" value={pct(s!.p_draw)} sub={`home ${pct(s!.p_reg_home)} · away ${pct(s!.p_reg_away)}`} />

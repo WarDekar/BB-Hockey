@@ -182,6 +182,9 @@ class ParamsBody(BaseModel):
     max_goals: Optional[int] = None
     draw_inflation: Optional[float] = None
     eng_rate: Optional[float] = None
+    eng_rate2: Optional[float] = None
+    eng_prior_games: Optional[int] = None
+    coach_eng: Optional[bool] = None
     ot_decided_share: Optional[float] = None
     ot_skill_k: Optional[float] = None
     so_skill_k: Optional[float] = None

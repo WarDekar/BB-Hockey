@@ -9,9 +9,10 @@ from typing import Callable, Dict, List, Optional
 from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
-from . import odds_reader
+from . import odds_reader, pbp
 from .config import settings
 from .edges import evaluate_quotes, positive_edges
+from .teams import nhl_abbr, resolve
 from .model.goals import ModelParams
 from .paper import auto_paper
 from .pricer import load_params, price_game, upsert_game
@@ -49,8 +50,10 @@ def pricing_pass(odds: Engine, hockey: Engine, params: Optional[ModelParams] = N
         g = dict(g); g["status"] = _status(g)
         if g["status"] != "pregame" or g["id"] not in cons:
             continue
+        home_t, away_t = resolve(g["home_name"]), resolve(g["away_name"])   # slate rows carry names, not abbreviations
+        eng = pbp.eng_for_game(hockey, nhl_abbr(home_t.abbr if home_t else None), nhl_abbr(away_t.abbr if away_t else None), params)
         with hockey.begin() as c:
-            r = price_game(c, g, cons[g["id"]], params)
+            r = price_game(c, g, cons[g["id"]], params, eng)
             if r is None:
                 continue
             sid, model, inputs, is_fresh = r
