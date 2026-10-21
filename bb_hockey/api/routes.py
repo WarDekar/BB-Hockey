@@ -212,16 +212,13 @@ def run_settlement() -> dict:
 
 
 @router.get("/pulls")
-def pulls(season: Optional[str] = None) -> dict:
-    """Goalie-pull analysis: per team-game situations + every episode (NHL.com play-by-play)."""
-    seasons = [int(x) for x in season.split(",") if x.strip().isdigit()] if season else None
-    out = pbp.situations(hockey_engine(), seasons)
+def pulls(deficit: int = 1, season: Optional[str] = None, game_type: Optional[int] = None, venue: Optional[str] = None,
+          teams: Optional[str] = None, coaches: Optional[str] = None, min_n: int = 1, bin_s: int = 30) -> dict:
+    """Goalie-pull desk, aggregated in SQL over the materialized situations view (no raw play-by-play leaves the server)."""
+    split = lambda v: [x for x in v.split(",") if x] if v else None  # noqa: E731
+    out = pbp.pull_report(hockey_engine(), deficit, seasons=split(season), game_type=game_type, venue=venue,
+                          teams=split(teams), coaches=split(coaches), min_n=min_n, bin_s=bin_s)
     out["coaches"] = _rows("SELECT league, team, coach, start_date, end_date, games FROM coaches ORDER BY team, start_date")
-    out["ingest"] = _rows("""
-        SELECT season, count(*) AS games, count(*) FILTER (WHERE error IS NOT NULL) AS errors,
-               count(*) FILTER (WHERE pull_source = 'pbp') AS pbp_only, max(game_date) AS last_date
-        FROM nhl_games WHERE game_type IN (2, 3) GROUP BY season ORDER BY season DESC
-    """)
     return out
 
 

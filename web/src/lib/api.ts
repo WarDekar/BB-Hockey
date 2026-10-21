@@ -73,14 +73,15 @@ export interface PullEpisode {
   score_for: number; score_against: number; deficit: number; goals_for: number; goals_against: number;
   final_for: number; final_against: number; reg_for: number; reg_against: number; went_ot: boolean;
 }
-export interface PullSituation {
-  game_id: number; season: number; game_type: number; game_date: string; team: string; is_home: boolean; coach: string | null; opp: string; opp_coach: string | null;
-  late_deficits: number[]; max_late_deficit: number | null; final_for: number; final_against: number; reg_for: number; reg_against: number;
-  went_ot: boolean; went_so: boolean; source: string | null;
-  pulls: { deficit: number; remaining_s: number; duration_s: number; goals_for: number; goals_against: number; ended_by: string; period: number }[];
+export interface PullAgg {
+  situations: number; pulled: number; pull_rate: number | null; median_s: number | null; p25_s: number | null; p75_s: number | null; earliest_s: number | null;
+  scored: number | null; tied: number | null; en: number | null; ot_or_won: number | null;
 }
+export interface PullCoach extends PullAgg { coach: string; teams: string; games: number; current_team: string | null }
+export interface PullBin { bin_s: number; pulls: number; en_rate: number; scored_rate: number }
 export interface Pulls {
-  situations: PullSituation[]; episodes: PullEpisode[]; seasons: number[];
+  deficit: number; league: PullAgg; by_coach: PullCoach[]; bins: PullBin[]; bin_s: number; episodes: PullEpisode[];
+  options: { seasons: number[]; teams: { key: string; n: number }[]; coaches: { key: string; n: number }[] };
   coaches: { league: string; team: string; coach: string; start_date: string; end_date: string | null; games: number }[];
-  ingest: { season: number; games: number; errors: number; pbp_only: number; last_date: string }[];
+  ingest: { season: number; games: number; errors: number; pbp_only: number; last_date: string | null }[];
 }

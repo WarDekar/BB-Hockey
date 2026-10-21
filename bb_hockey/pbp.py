@@ -373,6 +373,7 @@ def backfill(engine: Engine, seasons: List[int], workers: int = 6, game_types=(2
                 except Exception:  # noqa: BLE001
                     pass
     rebuild_coaches(engine)
+    refresh_situations(engine)
     return {"todo": len(todo), "ok": ok, "failed": failed}
 
 
@@ -395,6 +396,7 @@ def ingest_recent(engine: Engine, days_back: int = 2) -> dict:
             mark_error(engine, gid, g, str(e))
     if ok:
         rebuild_coaches(engine)
+        refresh_situations(engine)
     return {"ingested": ok, "failed": failed}
 
 
@@ -453,6 +455,7 @@ if __name__ == "__main__":
             except Exception as e:  # noqa: BLE001
                 logger.warning("rederive %s failed: %s", gid, e)
         rebuild_coaches(eng)
+        refresh_situations(eng)
         print({"games": len(ids), "ok": n_ok})
     elif cmd == "coaches":
         print("tenures:", rebuild_coaches(eng))
@@ -524,3 +527,96 @@ def situations(engine: Engine, seasons: Optional[List[int]] = None) -> dict:
         e["game_date"] = e["game_date"].isoformat()
     seasons_seen = sorted({int(g["season"]) for g in games}, reverse=True)
     return {"situations": rows, "episodes": episodes, "seasons": seasons_seen}
+
+
+# ----------------------------------------------------------------------------- report (aggregated, for the Pulls tab)
+def refresh_situations(engine: Engine) -> None:
+    with engine.begin() as c:
+        c.execute(text("REFRESH MATERIALIZED VIEW pull_situations"))
+
+
+def _filters(seasons, game_type, venue, teams, coaches, alias: str, team_col: str) -> Tuple[str, dict]:
+    where, params = [], {}
+    if seasons:
+        where.append(f"{alias}.season = ANY(:seasons)"); params["seasons"] = [int(s) for s in seasons]
+    if game_type:
+        where.append(f"{alias}.game_type = :gt"); params["gt"] = int(game_type)
+    if venue in ("home", "away"):
+        where.append(f"{alias}.is_home = :home"); params["home"] = venue == "home"
+    if teams:
+        where.append(f"{alias}.{team_col} = ANY(:teams)"); params["teams"] = list(teams)
+    if coaches:
+        where.append(f"{alias}.coach = ANY(:coaches)"); params["coaches"] = list(coaches)
+    return (" AND " + " AND ".join(where)) if where else "", params
+
+
+def pull_report(engine: Engine, deficit: int = 1, seasons=None, game_type=None, venue=None, teams=None, coaches=None,
+                min_n: int = 1, bin_s: int = 30, episodes_limit: int = 300) -> dict:
+    """Everything the Pulls tab draws, aggregated in SQL: league line, per-coach rows, timing bins
+    with the empty-net and scoring rate per bin, and the latest matching pulls."""
+    k = 3 if deficit >= 3 else max(1, int(deficit))
+    sw, sp = _filters(seasons, game_type, venue, teams, coaches, "s", "team")
+    pw, pp = _filters(seasons, game_type, venue, teams, coaches, "e", "team_abbr")
+    match = "e.deficit >= 3" if k == 3 else "e.deficit = :k"
+    in_def = "EXISTS (SELECT 1 FROM unnest(s.late_deficits) d WHERE d >= 3)" if k == 3 else ":k = ANY(s.late_deficits)"
+    base = f"""
+        WITH sit AS (
+            SELECT s.game_id, s.team, s.coach, s.reg_for, s.reg_against FROM pull_situations s WHERE {in_def}{sw}
+        ), p AS (
+            SELECT e.game_id, e.team_abbr AS team,
+                   max(e.pull_remaining_s) FILTER (WHERE e.kind = 'pull' AND {match}) AS t,
+                   bool_or(e.kind = 'pull' AND {match} AND e.goals_for > 0) AS scored,
+                   bool_or(e.kind = 'pull' AND e.goals_for > 0 AND e.deficit - e.goals_for + e.goals_against <= 0) AS tied,
+                   bool_or(e.kind = 'pull' AND {match} AND e.goals_against > 0) AS en
+            FROM goalie_pulls e WHERE e.kind = 'pull' GROUP BY 1, 2
+        ), j AS (
+            SELECT sit.*, p.t, p.scored, p.tied, p.en FROM sit LEFT JOIN p ON p.game_id = sit.game_id AND p.team = sit.team
+        )
+    """
+    agg = """
+        count(*) AS situations, count(t) AS pulled,
+        CASE WHEN count(*) > 0 THEN count(t)::float / count(*) END AS pull_rate,
+        percentile_cont(0.5) WITHIN GROUP (ORDER BY t) AS median_s,
+        percentile_cont(0.25) WITHIN GROUP (ORDER BY t) AS p25_s,
+        percentile_cont(0.75) WITHIN GROUP (ORDER BY t) AS p75_s,
+        max(t) AS earliest_s,
+        (avg(scored::int) FILTER (WHERE t IS NOT NULL))::float AS scored,
+        (avg(tied::int) FILTER (WHERE t IS NOT NULL))::float AS tied,
+        (avg(en::int) FILTER (WHERE t IS NOT NULL))::float AS en,
+        (avg((reg_for >= reg_against)::int))::float AS ot_or_won
+    """
+    params = dict(sp, k=k)
+    with engine.connect() as c:
+        league = dict(c.execute(text(base + f"SELECT {agg} FROM j"), params).mappings().first() or {})
+        by_coach = [dict(r) for r in c.execute(text(base + f"""
+            SELECT coach, string_agg(DISTINCT team, ' ' ORDER BY team) AS teams, {agg}
+            FROM j WHERE coach IS NOT NULL GROUP BY coach HAVING count(*) >= :min_n ORDER BY situations DESC
+        """), dict(params, min_n=int(min_n))).mappings().all()]
+        games = {r["coach"]: int(r["n"]) for r in c.execute(text(f"SELECT s.coach, count(*) AS n FROM pull_situations s WHERE true{sw} GROUP BY 1"), sp).mappings()}
+        current = {r[0]: r[1] for r in c.execute(text("SELECT coach, team FROM coaches WHERE league = 'NHL' AND end_date IS NULL"))}
+        for r in by_coach:
+            r["games"] = games.get(r["coach"], 0)
+            r["current_team"] = current.get(r["coach"])   # None when he is not behind an NHL bench today
+        bins = [dict(r) for r in c.execute(text(f"""
+            SELECT (LEAST(e.pull_remaining_s, 599) / :bin) * :bin AS bin_s, count(*) AS pulls,
+                   (avg((e.goals_against > 0)::int))::float AS en_rate, (avg((e.goals_for > 0)::int))::float AS scored_rate
+            FROM goalie_pulls e WHERE e.kind = 'pull' AND {match}{pw} GROUP BY 1 ORDER BY 1
+        """), dict(pp, k=k, bin=int(bin_s))).mappings().all()]
+        episodes = [dict(r) for r in c.execute(text(f"""
+            SELECT e.* FROM goalie_pulls e WHERE e.kind = 'pull' AND {match}{pw} ORDER BY e.game_date DESC, e.game_id DESC, e.episode_no LIMIT :lim
+        """), dict(pp, k=k, lim=int(episodes_limit))).mappings().all()]
+        options = {
+            "seasons": [int(r[0]) for r in c.execute(text("SELECT DISTINCT season FROM pull_situations ORDER BY 1 DESC"))],
+            "teams": [{"key": r[0], "n": int(r[1])} for r in c.execute(text("SELECT team, count(*) FROM pull_situations GROUP BY 1 ORDER BY 1"))],
+            "coaches": [{"key": r[0], "n": int(r[1])} for r in c.execute(text("SELECT coach, count(*) FROM pull_situations WHERE coach IS NOT NULL GROUP BY 1 ORDER BY 1"))],
+        }
+        ingest = [dict(r) for r in c.execute(text("""
+            SELECT season, count(*) AS games, count(*) FILTER (WHERE error IS NOT NULL) AS errors,
+                   count(*) FILTER (WHERE pull_source = 'pbp') AS pbp_only, max(game_date) AS last_date
+            FROM nhl_games WHERE game_type IN (2, 3) GROUP BY season ORDER BY season DESC
+        """)).mappings().all()]
+    for e in episodes:
+        e["game_date"] = e["game_date"].isoformat()
+    for i in ingest:
+        i["last_date"] = i["last_date"].isoformat() if i["last_date"] else None
+    return {"deficit": k, "league": league, "by_coach": by_coach, "bins": bins, "bin_s": bin_s, "episodes": episodes, "options": options, "ingest": ingest}
