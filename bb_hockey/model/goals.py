@@ -32,7 +32,9 @@ scores and period scores to price derivatives from. The model:
   and it replaces the mass shifts above. The coach rates still apply: the
   trailing coach's conversion relative to the league (``eng_rate`` /
   ``eng_rate2`` as the reference) moves the kernel's "leader adds one"
-  share by the same odds ratio. The old shift path is kept for
+  share by the same odds ratio. Pace: every "goals happen" cell of the
+  kernel scales by ``((λ_h+λ_a) / kernel_pace_ref) ** kernel_pace_k`` so a
+  7.0-total game adds more late goals than a 5.5 one. The old shift path is kept for
   ``late_kernel = False`` and validated side by side in
   ``docs/model/2026-10-20-baseline-validation.md``.
 * Tied after 60: decided in OT with probability ``ot_decided_share``,
@@ -81,6 +83,8 @@ class ModelParams:
     strength_sigma: float = 0.0   # optional mixture on the log rate-ratio; tested at 0.35 on 1,743 finals and rejected (overstates underdog blowouts)
     coach_eng: bool = True        # use the trailing side's coach rates when the benches are known
     late_kernel: bool = True      # last 3:00 of regulation from the measured LATE_KERNEL instead of Poisson tail + ENG shifts
+    kernel_pace_k: float = 0.5    # elasticity of the kernel's late goals to game pace: every 'goals happen' cell scales by ((λh+λa)/kernel_pace_ref)^k
+    kernel_pace_ref: float = 5.69 # λh+λa of the league-average game the kernel was measured on (equal teams, 5.97 regulation goals)
     ot_decided_share: float = 0.68    # of games tied after 60, decided in OT rather than the shootout (PBP 2023-26: 904 OT games, 290 shootouts)
     ot_skill_k: float = 0.5
     so_skill_k: float = 0.2
@@ -196,18 +200,37 @@ def _reweight_kernel(kern: Dict[Tuple[int, int], float], d: int, rate: Optional[
     return out
 
 
+def _pace_kernel(kern: Dict[Tuple[int, int], float], scale: float) -> Dict[Tuple[int, int], float]:
+    """Scale every 'goals happen' cell by ``scale`` and give the difference to (0, 0), so the expected number of
+    late goals moves with the game's pace while the mix of who scores them does not."""
+    if abs(scale - 1.0) < 1e-9:
+        return kern
+    p00 = kern.get((0, 0), 0.0)
+    scale = min(scale, 0.98 / max(1e-9, 1 - p00))
+    out = {k: v * scale for k, v in kern.items() if k != (0, 0)}
+    out[(0, 0)] = 1.0 - sum(out.values())
+    return out
+
+
+def pace_scale(lh: float, la: float, params: "ModelParams") -> float:
+    k = float(getattr(params, "kernel_pace_k", 0.0) or 0.0)
+    ref = float(getattr(params, "kernel_pace_ref", 5.69) or 5.69)
+    return ((lh + la) / ref) ** k if k and ref > 0 and (lh + la) > 0 else 1.0
+
+
 def _apply_late_kernel(m: np.ndarray, eng: Dict[str, float], params: "ModelParams", lh: float, la: float) -> np.ndarray:
     """From the score matrix at 17:00 of the third to the regulation final via ``LATE_KERNEL``."""
     n = m.shape[0] - 1
     out = np.zeros_like(m)
     wh = lh / (lh + la) if (lh + la) > 0 else 0.5
-    k0 = _reweight_kernel(LATE_KERNEL[0], 0, None, 0.0)
+    pace = pace_scale(lh, la, params)
+    k0 = _pace_kernel(_reweight_kernel(LATE_KERNEL[0], 0, None, 0.0), pace)
     kern = {d: {} for d in (1, 2, 3, 4)}
     for d in (1, 2, 3, 4):
         for side in ("home", "away"):
             rate = eng.get(f"{side}_lead{d}") if d <= 2 else None
             ref = params.eng_rate if d == 1 else params.eng_rate2
-            kern[d][side] = _reweight_kernel(LATE_KERNEL[d], d, rate, ref)
+            kern[d][side] = _pace_kernel(_reweight_kernel(LATE_KERNEL[d], d, rate, ref), pace)
     for h in range(n + 1):
         for a in range(n + 1):
             p = m[h, a]
@@ -438,6 +461,7 @@ class GameModel:
             "exp_reg_total": round(sum(k * v for k, v in self.total_reg.items()), 4),
             "eng": {k: round(v, 4) for k, v in self.eng.items()},
             "late_kernel": bool(getattr(self.params, "late_kernel", True)),
+            "pace_scale": round(pace_scale(self.lh, self.la, self.params), 4) if getattr(self.params, "late_kernel", True) else None,
         }
 
 

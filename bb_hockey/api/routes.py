@@ -190,6 +190,8 @@ class ParamsBody(BaseModel):
     strength_sigma: Optional[float] = None
     coach_eng: Optional[bool] = None
     late_kernel: Optional[bool] = None
+    kernel_pace_k: Optional[float] = None
+    kernel_pace_ref: Optional[float] = None
     ot_decided_share: Optional[float] = None
     ot_skill_k: Optional[float] = None
     so_skill_k: Optional[float] = None

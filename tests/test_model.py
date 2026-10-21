@@ -110,3 +110,13 @@ def test_late_kernel_is_proper_and_coach_sensitive():
     # Kernel games end with an odd total more often than the Poisson tail says (OT goals + empty-netters).
     odd = lambda m: sum(v for k, v in m.total_full.items() if k % 2)  # noqa: E731
     assert odd(base) > odd(legacy)
+
+
+def test_kernel_pace_scaling():
+    from bb_hockey.model.goals import GameModel, ModelParams, pace_scale
+    p = ModelParams(kernel_pace_k=1.0)
+    assert pace_scale(3.5, 3.2, p) > 1.0 > pace_scale(2.6, 2.4, p)
+    assert pace_scale(3.5, 3.2, ModelParams(kernel_pace_k=0.0)) == 1.0
+    fast, slow = GameModel(3.5, 3.2, p), GameModel(3.5, 3.2, ModelParams(kernel_pace_k=0.0))
+    assert abs(fast.reg.sum() - 1.0) < 1e-9
+    assert fast.summary()["exp_reg_total"] > slow.summary()["exp_reg_total"]  # more late goals at the same rates

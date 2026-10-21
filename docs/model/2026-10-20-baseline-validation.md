@@ -141,9 +141,24 @@ favourite −1.5 gives back 0.6 points (the kernel's down-one empty-net share
 at 17:00 is the league's, and the favourite-won-more residual above is
 unchanged). The one residual that got slightly worse is the low tail:
 three-goal games are 2 points over-produced, which is the Poisson's shape
-under a 5.5 line rather than anything late. The kernel is the same for
-every game; late scoring in high-total games is not scaled up, and the
-tails at 6.5 lines read about a point thin. Both are logged, not fitted.
+under a 5.5 line rather than anything late. The tails at 6.5 lines read
+about a point thin. Logged, not fitted.
+
+**Pace (added the same day).** Every "goals happen" cell of the kernel is
+scaled by `((λ_h+λ_a) / kernel_pace_ref) ^ kernel_pace_k`, the difference
+going to "nothing happens", so a 7.0-total game adds more late goals than
+a 5.5 one while the mix of who scores them is unchanged. The reference
+5.69 is the rate pair of the league-average game (5.97 regulation goals).
+The elasticity cannot be measured from the play-by-play: team-season pace
+only spans ±4% and the late-goal counts by margin show no slope outside
+noise (down one: 0.70 / 0.75 / 0.78 late goals across slow / average /
+fast thirds; down two: 0.95 / 0.90 / 1.02). On the 1,743 finals, 0, 0.5
+and 1.0 give the same averages to the first decimal because the lines
+there run 5.5 to 6.5 and the scale is within ±8%. The default is 0.5 on
+the structural argument that the ordinary-play share of late goals (about
+a third of them) moves with pace and the pull-driven share does not. At
+1.0 a 7.0-total coin-flip game moves the favourite −1.5 up 0.75 points
+and a 5.5 game down 0.3; at 0.5, half that.
 
 `late_kernel = 0` in Params restores the old path (set `draw_inflation`
 back to 1.45 with it).

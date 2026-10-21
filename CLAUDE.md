@@ -83,6 +83,9 @@ book's standing line and Pinnacle/DK/Bet365 go hours without a change, so a
 30-minute window (the original) silently dropped most of the board. Games
 the worker cannot price in a pass lose their edges, and `/edges` only
 returns rows from the last 20 minutes, so nothing survives a model change.
+The three filter bars persist to `localStorage`; an empty books list
+("None") is never restored (it comes back as all books), because a saved
+empty selection showed "0 of 3,668" with a misleading min-EV message.
 
 ## Hard rules
 
@@ -150,6 +153,11 @@ returns rows from the last 20 minutes, so nothing survives a model change.
    was 65.6%; exact 6 at 6.0 lines 11.1% vs 9.4%, was 11.7%) and the
    alternates (fav −2.5 28.1 vs 29.0, dog +2.5 71.9 vs 71.0) at the cost of
    0.6 points on the fav −1.5 (39.3 vs 41.4).
+   `kernel_pace_k` (0.5) scales the kernel's late goals with
+   `(λh+λa)/kernel_pace_ref` (5.69); the PBP cannot measure the elasticity
+   (team pace spans ±4%) and the historical set is indifferent between 0
+   and 1, so 0.5 is a structural prior, worth about ±0.4 points on the
+   alternates at 7.0 or 5.5 lines.
    **Exchange quotes are mids.** BB-Odds stores Polymarket (ids 700/761) and
    Kalshi (760) at the bid/ask midpoint (the ±1.5 pair shows identical
    prices), which BB-Odds's own notes call phantom +EV; `edges.py` applies a

@@ -11,7 +11,8 @@ import { ChipGroup, DATE_OPTS, Divider, LINE_OPTS, MultiSelect, PERIOD_OPTS, Sel
 interface Filters { status: string; line: string; period: string; source: string; books: string[] | null; date: string; from: string; to: string; team: string }
 const DEFAULT: Filters = { status: "all", line: "all", period: "all", source: "all", books: null, date: "all", from: "", to: "", team: "" };
 const KEY = "bbh_bets_filters_v1";
-const load = (): Filters => { try { return { ...DEFAULT, ...JSON.parse(localStorage.getItem(KEY) || "{}"), team: "" }; } catch { return DEFAULT; } };
+// An empty books list ("None") is a step toward picking a few, never a view worth restoring: it comes back as all books.
+const load = (): Filters => { try { const f = { ...DEFAULT, ...JSON.parse(localStorage.getItem(KEY) || "{}"), team: "" }; if (Array.isArray(f.books) && f.books.length === 0) f.books = null; return f; } catch { return DEFAULT; } };
 
 
 // Same definitions as paper.summary(), computed over whatever the bar leaves visible.
@@ -40,7 +41,7 @@ function breakdown(rows: Bet[], key: (b: Bet) => string) {
 export default function Bets({ bets, reload, onOpen }: { bets: Bet[]; reload: () => void; onOpen: (id: number) => void }) {
   const [f, setF] = useState<Filters>(load);
   const [err, setErr] = useState<string | null>(null);
-  useEffect(() => { try { localStorage.setItem(KEY, JSON.stringify({ ...f, team: "" })); } catch { /* private mode */ } }, [f]);
+  useEffect(() => { try { localStorage.setItem(KEY, JSON.stringify({ ...f, team: "", books: f.books && f.books.length ? f.books : null })); } catch { /* private mode */ } }, [f]);
   const set = (patch: Partial<Filters>) => setF((p) => ({ ...p, ...patch }));
 
   const books = useMemo(() => {

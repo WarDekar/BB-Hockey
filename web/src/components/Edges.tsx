@@ -9,7 +9,8 @@ import { ChipGroup, Divider, LINE_OPTS, MultiSelect, PERIOD_OPTS, inputClass, li
 interface Filters { line: string; period: string; side: string; papered: string; books: string[] | null; day: string; team: string; min: number | null; source: string }
 const DEFAULT: Filters = { line: "all", period: "all", side: "all", papered: "all", books: null, day: "all", team: "", min: null, source: "all" };
 const KEY = "bbh_edges_filters_v1";
-const load = (): Filters => { try { return { ...DEFAULT, ...JSON.parse(localStorage.getItem(KEY) || "{}"), team: "" }; } catch { return DEFAULT; } };
+// An empty books list ("None") is a step toward picking a few, never a view worth restoring: it comes back as all books.
+const load = (): Filters => { try { const f = { ...DEFAULT, ...JSON.parse(localStorage.getItem(KEY) || "{}"), team: "" }; if (Array.isArray(f.books) && f.books.length === 0) f.books = null; return f; } catch { return DEFAULT; } };
 
 const dayOf = (iso: string) => {
   const d0 = new Date(); d0.setHours(0, 0, 0, 0);
@@ -24,7 +25,7 @@ const adjOf = (e: Edge) => (e.base_prob === null || e.base_prob === undefined ? 
 
 export default function Edges({ rows, minEdge, onOpen }: { rows: Edge[]; minEdge: number; onOpen: (id: number) => void }) {
   const [f, setF] = useState<Filters>(load);
-  useEffect(() => { try { localStorage.setItem(KEY, JSON.stringify({ ...f, team: "" })); } catch { /* private mode */ } }, [f]);
+  useEffect(() => { try { localStorage.setItem(KEY, JSON.stringify({ ...f, team: "", books: f.books && f.books.length ? f.books : null })); } catch { /* private mode */ } }, [f]);
   const set = (patch: Partial<Filters>) => setF((p) => ({ ...p, ...patch }));
   const min = f.min ?? minEdge;
 
@@ -79,7 +80,7 @@ export default function Edges({ rows, minEdge, onOpen }: { rows: Edge[]; minEdge
       </div>
 
       <Panel className="flex min-h-0 flex-1 flex-col" bodyClassName="flex min-h-0 flex-1 flex-col p-3" title="Edges" right={active ? <span className="text-accent">filtered</span> : undefined}>
-        {!shown.length ? <Empty>{rows.length ? `No quotes match these filters above ${pct(min)} EV. Lower min EV (it can go negative) to see the whole board.` : "No pregame quotes evaluated yet."}</Empty> : (
+        {!shown.length ? <Empty>{!rows.length ? "No pregame quotes evaluated yet." : f.books && f.books.length === 0 ? "No books selected: pick some in the books dropdown, or All." : `No quotes match these filters above ${pct(min)} EV. Lower min EV (it can go negative) to see the whole board.`}</Empty> : (
           <div className="min-h-0 flex-1 overflow-auto scrollbar-thin">
             <table className="w-full text-xs">
               <thead className="sticky top-0 z-[1] bg-slate-900 shadow-[0_1px_0_0_var(--color-slate-800)]"><tr><Th>Game</Th><Th>Start</Th><Th>Market</Th><Th>Side</Th><Th>Book</Th><Th right>Price</Th><Th right>Fair</Th><Th right>Fair prob</Th><Th right>Base prob</Th><Th right>Bench adj</Th><Th right>EV</Th><Th right>Base EV</Th><Th right>¼ Kelly</Th><Th right>Quoted</Th><Th></Th></tr></thead>
