@@ -109,22 +109,35 @@ def book_quotes(engine: Engine, game_ids: Iterable[int], max_age_min: Optional[i
     return _takeable(out, poly_asks(engine, ids))
 
 
-def poly_asks(engine: Engine, game_ids: Iterable[int]) -> Dict[int, dict]:
-    """Polymarket asks (what a taker pays) keyed by BB-Odds market id, from BB-Poly's market table."""
+def poly_asks(engine: Engine, game_ids: Iterable[int]) -> Dict[tuple, dict]:
+    """Polymarket asks (what a taker pays) keyed by (BB-Odds market id, home point): a BB-Odds market is one
+    (game, type, period) and the line lives on the odds row, so each Polymarket line maps separately. Spread
+    rows come oriented by ``yes_outcome_team``; the home point is the line when the yes side is home, else its negative."""
     ids = _ids(game_ids)
     if not ids:
         return {}
     try:
         with engine.connect() as c:
             rows = c.execute(text("""
-                SELECT pm.bb_odds_market_id AS market_id, pm.home_american_ask, pm.away_american_ask, pm.updated_at
+                SELECT pm.bb_odds_market_id AS market_id, pm.market_type, pm.line, pm.yes_outcome_team,
+                       pm.home_american_ask, pm.away_american_ask, pm.updated_at
                 FROM bb_poly.poly_markets pm JOIN current.markets m ON m.id = pm.bb_odds_market_id
                 WHERE m.game_id = ANY(:ids) AND NOT pm.closed AND pm.home_american_ask IS NOT NULL AND pm.away_american_ask IS NOT NULL
             """), {"ids": ids}).mappings().all()
     except Exception as e:  # noqa: BLE001
         logger.warning("poly asks unavailable: %s", e)
         return {}
-    return {int(r["market_id"]): dict(r) for r in rows}
+    out: Dict[tuple, dict] = {}
+    for r in rows:
+        line = float(r["line"]) if r["line"] is not None else None
+        if r["market_type"] == "spread" and line is not None:
+            home_point = line if (r["yes_outcome_team"] or "home") == "home" else -line
+        else:
+            home_point = line
+        key = (int(r["market_id"]), home_point)
+        if key not in out or (r["updated_at"] and out[key]["updated_at"] and r["updated_at"] > out[key]["updated_at"]):
+            out[key] = dict(r)
+    return out
 
 
 def _worsen(price: Optional[float], haircut: float) -> Optional[float]:
@@ -143,7 +156,12 @@ def _takeable(quotes: List[dict], asks: Dict[int, dict]) -> List[dict]:
         if q.get("book") not in settings.exchange_mid_books:
             continue
         q["home_price_quoted"], q["away_price_quoted"] = q.get("home_price"), q.get("away_price")
-        a = asks.get(int(q["market_id"])) if q.get("market_id") is not None and q.get("book") == "Polymarket" else None
+        hp = float(q["home_point"]) if q.get("home_point") is not None else None
+        a = asks.get((int(q["market_id"]), hp)) if q.get("market_id") is not None and q.get("book") == "Polymarket" else None
+        # sanity: an ask can only be worse for the taker than the mid; anything else is a mapping or staleness problem
+        if a and (american_to_prob(float(a["home_american_ask"])) < american_to_prob(float(q["home_price"])) - 0.002
+                  or american_to_prob(float(a["away_american_ask"])) < american_to_prob(float(q["away_price"])) - 0.002):
+            a = None
         if a:
             q["home_price"], q["away_price"], q["price_basis"] = float(a["home_american_ask"]), float(a["away_american_ask"]), "ask"
         else:

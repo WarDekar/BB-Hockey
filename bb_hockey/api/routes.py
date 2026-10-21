@@ -93,7 +93,7 @@ def game_detail(game_id: int) -> dict:
             quotes = []
         quotes_eval = evaluate_quotes(model, quotes, baseline_from_snapshot(snap))
         best = {f"{k[0]}|{k[1]}|{k[2]}": v for k, v in best_per_side(quotes_eval).items()}
-    edges = _rows("SELECT * FROM edges WHERE game_id = :g ORDER BY ev DESC", g=game_id)
+    edges = _rows("SELECT * FROM edges WHERE game_id = :g AND ev >= 0 ORDER BY ev DESC", g=game_id)
     bets = _rows("SELECT * FROM paper_bets WHERE game_id = :g ORDER BY placed_at DESC", g=game_id)
     if closing:
         closing = {k: v for k, v in closing.items() if k != "board"} | {"board": closing["board"]}
@@ -102,7 +102,7 @@ def game_detail(game_id: int) -> dict:
 
 
 @router.get("/edges")
-def edges(min_ev: Optional[float] = None, limit: int = 300) -> List[dict]:
+def edges(min_ev: Optional[float] = None, limit: int = 5000) -> List[dict]:
     min_ev = settings.min_edge if min_ev is None else min_ev
     return _rows("""
         SELECT e.*, g.home_name, g.away_name, g.home_abbr, g.away_abbr, g.game_time, g.status,

@@ -61,7 +61,7 @@ def pricing_pass(odds: Engine, hockey: Engine, params: Optional[ModelParams] = N
             sid, model, inputs, is_fresh, base = r
             priced += 1; fresh += int(is_fresh)
             rows = evaluate_quotes(model, quotes_by_game.get(g["id"], []), base)
-            pos = positive_edges(rows, min_ev=0.0)
+            pos = positive_edges(rows, min_ev=settings.store_min_ev)   # the whole evaluated board, capped at max_edge
             c.execute(text("DELETE FROM edges WHERE game_id = :g"), {"g": g["id"]})
             if pos:
                 c.execute(text("""

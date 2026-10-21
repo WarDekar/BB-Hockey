@@ -54,7 +54,7 @@ export default function Edges({ rows, minEdge, onOpen }: { rows: Edge[]; minEdge
     <div className="flex h-full min-h-0 flex-col gap-3">
       <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-slate-800 bg-slate-900 px-3 py-2">
         <label className="flex items-center gap-1 text-[11px] text-slate-500">min EV
-          <input type="number" step="0.5" value={(min * 100).toFixed(1)} onChange={(e) => set({ min: Number(e.target.value) / 100 })} className={`${inputClass} w-14 text-right font-mono`} />%
+          <input type="number" step="0.5" min={-50} value={(min * 100).toFixed(1)} onChange={(e) => set({ min: Number(e.target.value) / 100 })} className={`${inputClass} w-16 text-right font-mono`} title="negative shows every quote on the board, including -EV ones" />%
         </label>
         <Divider />
         <ChipGroup value={f.line} onChange={(line) => set({ line })} options={LINE_OPTS} />
@@ -79,7 +79,7 @@ export default function Edges({ rows, minEdge, onOpen }: { rows: Edge[]; minEdge
       </div>
 
       <Panel className="flex min-h-0 flex-1 flex-col" bodyClassName="flex min-h-0 flex-1 flex-col p-3" title="Edges" right={active ? <span className="text-accent">filtered</span> : undefined}>
-        {!shown.length ? <Empty>{rows.length ? `No quotes match these filters above ${pct(min)} EV.` : `No quotes above ${pct(min)} EV on pregame games right now.`}</Empty> : (
+        {!shown.length ? <Empty>{rows.length ? `No quotes match these filters above ${pct(min)} EV. Lower min EV (it can go negative) to see the whole board.` : "No pregame quotes evaluated yet."}</Empty> : (
           <div className="min-h-0 flex-1 overflow-auto scrollbar-thin">
             <table className="w-full text-xs">
               <thead className="sticky top-0 z-[1] bg-slate-900 shadow-[0_1px_0_0_var(--color-slate-800)]"><tr><Th>Game</Th><Th>Start</Th><Th>Market</Th><Th>Side</Th><Th>Book</Th><Th right>Price</Th><Th right>Fair</Th><Th right>Fair prob</Th><Th right>Base prob</Th><Th right>Bench adj</Th><Th right>EV</Th><Th right>Base EV</Th><Th right>¼ Kelly</Th><Th right>Quoted</Th><Th></Th></tr></thead>

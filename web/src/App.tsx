@@ -21,7 +21,7 @@ export default function App() {
   const tab: Tab = (TABS as readonly string[]).includes(hash) ? (hash as Tab) : "board";
   const health = useApi<Health>("/health", 30000);
   const slate = useApi<SlateRow[]>(tab === "board" ? "/slate" : null, 60000);
-  const edges = useApi<Edge[]>(tab === "edges" ? "/edges?min_ev=0" : null, 60000);
+  const edges = useApi<Edge[]>(tab === "edges" ? "/edges?min_ev=-1" : null, 60000);   // the whole board; the tab's min-EV box filters
   const bets = useApi<Bet[]>(tab === "bets" ? "/bets?limit=5000" : null, 60000);
   const betSummary = useApi<BetSummary>(tab === "bets" ? "/bets/summary" : null, 60000);
   const results = useApi<ResultRow[]>(tab === "results" ? "/results?days=365" : null, 120000);

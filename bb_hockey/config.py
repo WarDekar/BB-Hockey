@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     auto_paper: bool = True
     min_edge: float = 0.03            # EV per unit to auto-paper
     max_edge: float = 0.20            # above this it is a stale or mis-mapped quote, not an edge
+    store_min_ev: float = -1.0        # every evaluated quote is kept (negative EV included) so the Edges tab can show the whole board
     kelly_fraction: float = 0.25
     unit: float = 100.0
     max_stake_units: float = 1.0
