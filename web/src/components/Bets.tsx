@@ -3,7 +3,7 @@ import type { Bet } from "../lib/api";
 import { sendJson } from "../lib/api";
 import { evClass, fmtAmerican, fmtTime, marketLabel, matchup, money, num, pct, sideLabel, signedPct } from "../lib/format";
 import { Button, Empty, ErrorBox, Panel, Pill, Stat, Td, Th } from "./Primitives";
-import { ChipGroup, Divider, LINE_OPTS, MultiSelect, PERIOD_OPTS, Select, inputClass, lineOf, periodOf, teamMatch } from "./Filters";
+import { ChipGroup, DATE_OPTS, Divider, LINE_OPTS, MultiSelect, PERIOD_OPTS, Select, dateRange, inputClass, lineOf, periodOf, teamMatch } from "./Filters";
 
 // Filter bar after BB-Odds's My Till: status × line × period × source chip
 // groups, a books multi-select and a game-date preset, all composing. The
@@ -13,29 +13,6 @@ const DEFAULT: Filters = { status: "all", line: "all", period: "all", source: "a
 const KEY = "bbh_bets_filters_v1";
 const load = (): Filters => { try { return { ...DEFAULT, ...JSON.parse(localStorage.getItem(KEY) || "{}"), team: "" }; } catch { return DEFAULT; } };
 
-
-const DATE_OPTS = [
-  { value: "all", label: "All time" }, { value: "today", label: "Today" }, { value: "yesterday", label: "Yesterday" }, { value: "last7", label: "Last 7 days" },
-  { value: "thisWeek", label: "This week" }, { value: "lastWeek", label: "Last week" }, { value: "thisMonth", label: "This month" }, { value: "lastMonth", label: "Last month" },
-  { value: "custom", label: "Custom…" },
-];
-function dateRange(preset: string, from: string, to: string): [Date | null, Date | null] {
-  const d0 = new Date(); d0.setHours(0, 0, 0, 0);
-  const addD = (d: Date, n: number) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
-  const weekStart = addD(d0, -((d0.getDay() + 6) % 7));
-  const monthStart = new Date(d0.getFullYear(), d0.getMonth(), 1);
-  switch (preset) {
-    case "today": return [d0, addD(d0, 1)];
-    case "yesterday": return [addD(d0, -1), d0];
-    case "last7": return [addD(d0, -6), addD(d0, 1)];
-    case "thisWeek": return [weekStart, addD(weekStart, 7)];
-    case "lastWeek": return [addD(weekStart, -7), weekStart];
-    case "thisMonth": return [monthStart, new Date(d0.getFullYear(), d0.getMonth() + 1, 1)];
-    case "lastMonth": return [new Date(d0.getFullYear(), d0.getMonth() - 1, 1), monthStart];
-    case "custom": return [from ? new Date(`${from}T00:00`) : null, to ? addD(new Date(`${to}T00:00`), 1) : null];
-    default: return [null, null];
-  }
-}
 
 // Same definitions as paper.summary(), computed over whatever the bar leaves visible.
 const SETTLED = new Set(["won", "lost", "push"]);

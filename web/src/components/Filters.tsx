@@ -109,3 +109,28 @@ export const LINE_OPTS: [string, string][] = [["ml", "ML"], ["spread", "Puck"], 
 export const PERIOD_OPTS: [string, string][] = [["game", "Game"], ["p1", "P1"], ["p2", "P2"], ["p3", "P3"]];
 export const teamMatch = (q: string, r: { home_name?: string; away_name?: string; home_abbr?: string | null; away_abbr?: string | null }) =>
   !q || [r.home_name, r.away_name, r.home_abbr, r.away_abbr].some((x) => x?.toLowerCase().includes(q));
+
+// Game-date presets (My Till's Quick Select), applied to game time.
+export const DATE_OPTS = [
+  { value: "all", label: "All time" }, { value: "today", label: "Today" }, { value: "yesterday", label: "Yesterday" }, { value: "last7", label: "Last 7 days" },
+  { value: "thisWeek", label: "This week" }, { value: "lastWeek", label: "Last week" }, { value: "thisMonth", label: "This month" }, { value: "lastMonth", label: "Last month" },
+  { value: "custom", label: "Custom…" },
+];
+export function dateRange(preset: string, from: string, to: string): [Date | null, Date | null] {
+  const d0 = new Date(); d0.setHours(0, 0, 0, 0);
+  const addD = (d: Date, n: number) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
+  const weekStart = addD(d0, -((d0.getDay() + 6) % 7));
+  const monthStart = new Date(d0.getFullYear(), d0.getMonth(), 1);
+  switch (preset) {
+    case "today": return [d0, addD(d0, 1)];
+    case "yesterday": return [addD(d0, -1), d0];
+    case "last7": return [addD(d0, -6), addD(d0, 1)];
+    case "thisWeek": return [weekStart, addD(weekStart, 7)];
+    case "lastWeek": return [addD(weekStart, -7), weekStart];
+    case "thisMonth": return [monthStart, new Date(d0.getFullYear(), d0.getMonth() + 1, 1)];
+    case "lastMonth": return [new Date(d0.getFullYear(), d0.getMonth() - 1, 1), monthStart];
+    case "custom": return [from ? new Date(`${from}T00:00`) : null, to ? addD(new Date(`${to}T00:00`), 1) : null];
+    default: return [null, null];
+  }
+}
+

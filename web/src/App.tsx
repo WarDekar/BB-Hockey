@@ -23,7 +23,7 @@ export default function App() {
   const edges = useApi<Edge[]>(tab === "edges" ? "/edges?min_ev=0" : null, 60000);
   const bets = useApi<Bet[]>(tab === "bets" ? "/bets?limit=5000" : null, 60000);
   const betSummary = useApi<BetSummary>(tab === "bets" ? "/bets/summary" : null, 60000);
-  const results = useApi<ResultRow[]>(tab === "results" ? "/results" : null, 120000);
+  const results = useApi<ResultRow[]>(tab === "results" ? "/results?days=365" : null, 120000);
   const calib = useApi<Calib>(tab === "calibration" ? "/calibration" : null, 0);
   const params = useApi<P>(tab === "params" ? "/params" : null, 0, false);
   const detail = useApi<Detail>(gameId ? `/games/${gameId}` : null, 30000);
