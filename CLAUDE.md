@@ -83,7 +83,7 @@ book's standing line and Pinnacle/DK/Bet365 go hours without a change, so a
 30-minute window (the original) silently dropped most of the board. Games
 the worker cannot price in a pass lose their edges, and `/edges` only
 returns rows from the last 20 minutes, so nothing survives a model change.
-The three filter bars persist to `localStorage`; an empty books list
+The API gzips responses (the raw board is ~3 MB) and `useApi` keeps the last payload per path for the session, so a tab switch renders at once and refreshes behind (timer and worker pushes within 15 s of a load are coalesced). The three filter bars persist to `localStorage`; an empty books list
 ("None") is never restored (it comes back as all books), because a saved
 empty selection showed "0 of 3,668" with a misleading min-EV message.
 

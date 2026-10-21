@@ -23,7 +23,7 @@ export function loadTeams(): Promise<Record<string, TeamIdentity>> {
   return inflight;
 }
 
-/** Re-renders the caller once the identities land; returns the store (empty until then). */
+/** Re-renders the caller once the identities land; returns the store (empty until then). Call it once at the root (App), not per cell. */
 export function useTeams(): Record<string, TeamIdentity> {
   const [, bump] = useState(0);
   useEffect(() => {

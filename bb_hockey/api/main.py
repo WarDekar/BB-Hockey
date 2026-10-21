@@ -16,6 +16,7 @@ from pathlib import Path
 import socketio
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse, RedirectResponse
 
 from ..config import REPO, settings
@@ -47,6 +48,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="BB-Hockey", version="0.1.0", lifespan=lifespan)
+app.add_middleware(GZipMiddleware, minimum_size=1024)   # the whole edges board is ~3 MB raw, ~300 KB gzipped
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3018", "http://127.0.0.1:3018"],

@@ -9,10 +9,9 @@
 // a dead link leaves no empty circle, `alt=''` because the logo sits beside the team code.
 // One shared component, never inlined at a call site: inlining is how BB-Odds's grid ended
 // up with bare logos.
-import { teamOf, useTeams } from "../lib/teams";
+import { teamOf } from "../lib/teams";
 
 export function TeamLogo({ abbr, url, size = 22, className = "", alt = "" }: { abbr?: string | null; url?: string | null; size?: number; className?: string; alt?: string }) {
-  useTeams();
   const src = url ?? teamOf(abbr)?.logo_url ?? null;
   if (!src) return null;
   return (

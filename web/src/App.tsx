@@ -9,6 +9,7 @@ import Pulls from "./components/Pulls";
 import { Button, Empty, ErrorBox } from "./components/Primitives";
 import Results from "./components/Results";
 import { useApi, useHash } from "./hooks";
+import { useTeams } from "./lib/teams";
 import type { Bet, BetSummary, Calibration as Calib, Edge, GameDetail as Detail, Health, Params as P, ResultRow, SlateRow } from "./lib/api";
 import { ago, money } from "./lib/format";
 
@@ -19,6 +20,7 @@ export default function App() {
   const [hash, setHash] = useHash();
   const gameId = hash.startsWith("game=") ? Number(hash.slice(5)) : null;
   const tab: Tab = (TABS as readonly string[]).includes(hash) ? (hash as Tab) : "board";
+  useTeams();   // one subscription for the tree: cells read the store directly (thousands of per-cell hooks were the Edges render cost)
   const health = useApi<Health>("/health", 30000);
   const slate = useApi<SlateRow[]>(tab === "board" ? "/slate" : null, 60000);
   const edges = useApi<Edge[]>(tab === "edges" ? "/edges?min_ev=-1" : null, 60000);   // the whole board; the tab's min-EV box filters

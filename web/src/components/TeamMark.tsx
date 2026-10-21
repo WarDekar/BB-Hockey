@@ -2,7 +2,7 @@
 // `Matchup` is the "AWAY @ HOME" cell every table uses; `TeamTag` is a single team.
 import { HoverTip } from "./HoverTip";
 import { TeamLogo } from "./TeamLogo";
-import { teamOf, useTeams } from "../lib/teams";
+import { teamOf } from "../lib/teams";
 
 /**
  * `pad` fixes the rotation (3 ch, right-aligned) and the code (3 ch, mono) to column
@@ -12,7 +12,6 @@ import { teamOf, useTeams } from "../lib/teams";
 export function TeamTag({ abbr, name, size = 18, className = "", rotation, labelOverride, pad = false, align = "left" }: {
   abbr?: string | null; name?: string | null; size?: number; className?: string; rotation?: number | null; labelOverride?: string; pad?: boolean; align?: "left" | "right";
 }) {
-  useTeams();
   const t = teamOf(abbr);
   const full = t?.name ?? name ?? abbr ?? "";
   const tip = full || rotation ? <span>{full}{rotation ? <span className="ml-2 font-mono text-slate-400">rot {rotation}</span> : null}</span> : null;
@@ -33,7 +32,6 @@ export function Matchup({ g, size = 18, className = "", rotations = false }: {
   g: { home_abbr?: string | null; away_abbr?: string | null; home_name?: string | null; away_name?: string | null; home_rotation?: number | null; away_rotation?: number | null };
   size?: number; className?: string; rotations?: boolean;
 }) {
-  useTeams();
   const a = teamOf(g.away_abbr), h = teamOf(g.home_abbr);
   const tip = (
     <span>
