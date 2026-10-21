@@ -20,7 +20,7 @@ function BenchRead({ b, team, opp }: { b: Bench | null; team: string; opp: strin
     b.tags.length ? b.tags.join(" · ") : ""].filter(Boolean).join("\n");
   return (
     <span className="whitespace-nowrap" title={title}>
-      <span className="text-slate-400">{team} {b.coach.split(" ").slice(-1)[0]}:</span>{" "}
+      <span className="text-slate-400">{team} {b.coach.split(" ").slice(1).join(" ")}:</span>{" "}
       {items.length ? items.map((it, i) => <span key={i} className={it.cls}>{i ? " · " : ""}{it.text}</span>) : <span className="text-slate-600">no lean{d1 && d1.n < 12 ? " (thin)" : ""}</span>}
     </span>
   );
