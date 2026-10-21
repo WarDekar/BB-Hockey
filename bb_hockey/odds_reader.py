@@ -137,7 +137,7 @@ def closing_book_quote(engine: Engine, game_id: int, market_type: str, period: s
             FROM main.odds o JOIN main.markets m ON m.id = o.market_id
             WHERE m.game_id = :gid AND m.market_type = :mt AND m.period = :p AND o.sportsbook_id = :book
               AND o.timestamp >= :lo AND o.timestamp <= :hi
-              AND (:pt IS NULL OR o.home_point = :pt)
+              AND (CAST(:pt AS float8) IS NULL OR o.home_point = CAST(:pt AS float8))
             ORDER BY o.timestamp DESC LIMIT 1
         """), {"gid": int(game_id), "mt": market_type, "p": period, "book": int(sportsbook_id),
                "lo": game_time - timedelta(hours=settings.close_lookback_h),

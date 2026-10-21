@@ -206,7 +206,7 @@ def settle_pass(odds: Engine, hockey: Engine, params: ModelParams) -> dict:
     with hockey.connect() as c:
         due = [dict(r) for r in c.execute(text("""
             SELECT id, espn_game_id, game_time, home_name, away_name, status FROM games
-            WHERE status <> 'final' AND game_time <= :t ORDER BY game_time
+            WHERE settled_at IS NULL AND game_time <= :t ORDER BY game_time
         """), {"t": now - GAME_LENGTH}).mappings()]
         live = c.execute(text("UPDATE games SET status='live', updated_at=now() WHERE status='pregame' AND game_time <= :t"),
                          {"t": now}).rowcount

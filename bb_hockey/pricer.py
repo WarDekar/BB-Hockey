@@ -113,7 +113,9 @@ def model_from_snapshot(snapshot: dict) -> GameModel:
 
 def upsert_game(c: Connection, g: dict) -> None:
     home, away = resolve(g["home_name"]), resolve(g["away_name"])
-    status = "final" if g.get("completed") else ("live" if g.get("started") else "pregame")
+    # BB-Odds's completed flag only tells us the game is over; 'final' is set by
+    # settlement once ESPN has graded it, otherwise settle_pass would never see it.
+    status = "live" if (g.get("completed") or g.get("started")) else "pregame"
     c.execute(text("""
         INSERT INTO games (id, external_id, espn_game_id, game_time, home_name, away_name, home_abbr, away_abbr,
                            home_rotation, away_rotation, status, updated_at)

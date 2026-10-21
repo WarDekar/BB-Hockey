@@ -1,6 +1,6 @@
 # BB-Hockey — Claude Context
 
-**Last updated: 2026-10-15.** This is the Hockey Claude: this repo owns NHL
+**Last updated: 2026-10-20.** This is the Hockey Claude: this repo owns NHL
 derivative pricing in the `~/Dev` fleet. Cross-project communication happens
 only through `docs/handoffs/` markdown (see `Brandos-World/conventions/`).
 
@@ -35,9 +35,15 @@ GitHub had an empty README). Everything here was rebuilt in one session on
 | First slate | 16 games, 13 priced (3 had no consensus yet), ~90 quotes above 3% EV, auto-paper placed |
 | Tests | 18 passing (`./.venv/bin/python -m pytest -q`), no DB needed |
 
-**Not yet verified:** settlement has not run against a real final (first
-finals land tonight, 2026-10-15 ET). Watch `pm2 logs bb-hockey-backend` and
-the Results tab; `POST /hockey/api/run/settlement` forces a pass.
+**Settlement verified 2026-10-20.** Two bugs hid it for five nights: `upsert_game`
+copied BB-Odds's `completed` flag into `games.status='final'`, and `settle_pass`
+only looked at `status <> 'final'`, so 36 of the first 40 finals were never
+graded. Now BB-Odds can only move a game to `live`; `final` is set by
+settlement alone, and `settle_pass` keys on `settled_at IS NULL`. The
+closing-quote lookup also failed on an untyped NULL bind (`CAST(:pt AS float8)`).
+After the catch-up: 40 finals graded, 256 bets settled (+6.1% ROI on paper,
+avg model CLV −0.7%, price CLV available on about half the bets), 5,980
+calibration observations. `POST /hockey/api/run/settlement` forces a pass.
 
 ## Hard rules
 
@@ -99,8 +105,9 @@ the Results tab; `POST /hockey/api/run/settlement` forces a pass.
 
 ## Next
 
-1. **Watch the first settlements** (tonight) — ESPN id match, period parsing,
-   CLV lookups against `main.odds`, calibration rows appearing.
+1. **Review the first week of results** in the Results and Calibration tabs;
+   `p1_total` is the one losing market so far and its model CLV is ~0, which
+   is what a fixed P1 share prior would produce (see item 2).
 2. **Period anchoring** (optional): fit P1 share per game to the 1q consensus
    total instead of the global prior, once the 1q consensus is trusted.
 3. **Regulation-total and team-total quotes** are not in BB-Odds, so those
