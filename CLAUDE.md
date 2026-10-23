@@ -80,7 +80,15 @@ the Edges tab fetches `/edges?min_ev=-1` and its min-EV box (can go
 negative) filters, so the books dropdown lists the whole board. Pregame
 quotes count for `quote_max_age_min` = 720 minutes: `current.odds` is each
 book's standing line and Pinnacle/DK/Bet365 go hours without a change, so a
-30-minute window (the original) silently dropped most of the board. Games
+30-minute window (the original) silently dropped most of the board.
+**Only the `oddslogic` and `bb_poly` feeds count (`quote_sources`, 2026-10-23):**
+BB-Odds still carries `donbest_live` rows for ~90 books (the lapsed DonBest
+subscription), a second copy of books OddsLogic has live (BetOnline 1393 beside
+713, DK 1563 beside 722, WPH 1383 beside 737), 10+ hours stale on a game day;
+MTL −1.5 showed BetOnline +174 (DonBest, 04:14) next to +157 (OddsLogic, 09:31)
+and 80% of the board was those rows. `books_active_only` adds BB-Odds's own
+grid rule (`sportsbooks.active`, what Top Bets uses); it is off because the
+operator keeps the exchanges and per-head books off that grid. Games
 the worker cannot price in a pass lose their edges, and `/edges` only
 returns rows from the last 20 minutes, so nothing survives a model change.
 The API gzips responses (the raw board is ~3 MB) and `useApi` keeps the last payload per path for the session, so a tab switch renders at once and refreshes behind (timer and worker pushes within 15 s of a load are coalesced). The three filter bars persist to `localStorage`; an empty books list

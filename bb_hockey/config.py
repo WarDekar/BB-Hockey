@@ -21,6 +21,10 @@ class Settings(BaseSettings):
     pbp_interval: int = 1800          # seconds between NHL play-by-play ingest passes
     slate_hours_ahead: int = 48
     quote_max_age_min: int = 720      # a pregame book quote older than this is ignored; current.odds is each book's standing line, so hours-old is normal (the Edges tab shows the age)
+    # BB-Odds feeds whose quotes count. `donbest_live` is left out: the subscription lapsed and its rows are a
+    # second copy of books OddsLogic carries live (BetOnline 1393 beside 713), 10+ hours stale on a game day.
+    quote_sources: tuple = ("oddslogic", "bb_poly")
+    books_active_only: bool = False   # True = only books shown on the operator's BB-Odds grid (what Top Bets uses)
     close_grace_min: int = 45         # BB-Odds closing_line.py: how far past start the close may sit
     close_lookback_h: int = 36
 

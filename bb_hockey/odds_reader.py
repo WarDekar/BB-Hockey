@@ -87,7 +87,13 @@ def consensus(engine: Engine, game_ids: Iterable[int], book_id: int = 413) -> Di
 
 
 def book_quotes(engine: Engine, game_ids: Iterable[int], max_age_min: Optional[int] = None) -> List[dict]:
-    """Every live, non-synthetic book quote on the pregame markets we can price."""
+    """Every live, non-synthetic book quote on the pregame markets we can price.
+
+    Only ``settings.quote_sources`` feeds count: ``donbest_live`` rows are a second copy of books
+    OddsLogic carries live (BetOnline 1393 beside 713) and sit 10+ hours stale on a game day, so a
+    +174 showed on the board while the live row said +157. ``books_active_only`` adds BB-Odds's own
+    rule (``active`` = shown on the operator's grid; what Top Bets, consensus and the edge watcher
+    use), which also hides exchanges and per-head books the operator keeps off that grid."""
     ids = _ids(game_ids)
     if not ids:
         return []
@@ -101,10 +107,13 @@ def book_quotes(engine: Engine, game_ids: Iterable[int], max_age_min: Optional[i
             JOIN current.sportsbooks s ON s.id = o.sportsbook_id
             WHERE m.game_id = ANY(:ids)
               AND m.market_type IN ('h2h','spreads','totals') AND m.period IN ('game','1q','1h','2h')
+              AND s.source = ANY(:sources)
+              AND (CAST(:active_only AS boolean) = false OR s.active IS TRUE)
               AND COALESCE(s.is_synthetic, false) = false
               AND COALESCE(s.uses_live_markets_only, false) = false
               AND o.timestamp >= :since
-        """), {"ids": ids, "since": datetime.now(timezone.utc) - timedelta(minutes=max_age_min)}).mappings().all()
+        """), {"ids": ids, "since": datetime.now(timezone.utc) - timedelta(minutes=max_age_min),
+               "sources": list(settings.quote_sources), "active_only": bool(settings.books_active_only)}).mappings().all()
     out = [dict(r) for r in rows]
     return _takeable(out, poly_asks(engine, ids))
 
