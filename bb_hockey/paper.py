@@ -94,6 +94,8 @@ def ledger(engine: Engine, status: Optional[str] = None, limit: int = 500) -> Li
 
 
 def summary(engine: Engine) -> dict:
+    """Totals over the ledger less flagged bets (``flag`` set: placed on a quote that was never live, e.g. a
+    donbest_live copy of a book); those are counted separately under ``flagged`` so the ROI is honest."""
     with engine.connect() as c:
         tot = c.execute(text("""
             SELECT count(*) FILTER (WHERE status='pending') AS pending,
@@ -108,7 +110,11 @@ def summary(engine: Engine) -> dict:
                    count(*) FILTER (WHERE clv_model > 0) AS clv_model_pos,
                    count(*) FILTER (WHERE clv_model IS NOT NULL) AS clv_model_n,
                    avg(ev) FILTER (WHERE status <> 'void') AS avg_ev
-            FROM paper_bets
+            FROM paper_bets WHERE flag IS NULL
+        """)).mappings().first()
+        flagged = c.execute(text("""
+            SELECT count(*) AS n, COALESCE(sum(pnl), 0) AS pnl, count(*) FILTER (WHERE status = 'void') AS voided
+            FROM paper_bets WHERE flag IS NOT NULL
         """)).mappings().first()
         by_market = c.execute(text("""
             SELECT market, count(*) AS n,
@@ -118,9 +124,10 @@ def summary(engine: Engine) -> dict:
                    COALESCE(sum(pnl), 0) AS pnl,
                    avg(clv_model) FILTER (WHERE clv_model IS NOT NULL) AS avg_clv_model,
                    avg(ev) AS avg_ev
-            FROM paper_bets WHERE status <> 'void' GROUP BY market ORDER BY market
+            FROM paper_bets WHERE status <> 'void' AND flag IS NULL GROUP BY market ORDER BY market
         """)).mappings().all()
     out = dict(tot)
+    out["flagged"] = dict(flagged)   # bets on quotes that were never live (flag = 'stale_feed'); outside every total above
     out["roi"] = (out["pnl"] / out["staked"]) if out["staked"] else None
     out["by_market"] = [dict(r) for r in by_market]
     return out

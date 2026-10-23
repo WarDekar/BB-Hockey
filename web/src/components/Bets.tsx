@@ -18,16 +18,20 @@ const KEY = "bbh_bets_filters_v1";
 const load = (): Filters => { try { const f = { ...DEFAULT, ...JSON.parse(localStorage.getItem(KEY) || "{}"), team: "" }; if (Array.isArray(f.books) && f.books.length === 0) f.books = null; return f; } catch { return DEFAULT; } };
 
 
-// Same definitions as paper.summary(), computed over whatever the bar leaves visible.
+// Same definitions as paper.summary(), computed over whatever the bar leaves visible. Flagged bets (placed on a
+// quote that was never live, e.g. a donbest_live copy of a book) stay in the table but are outside every number.
 const SETTLED = new Set(["won", "lost", "push"]);
+const FLAG_TIP: Record<string, string> = { stale_feed: "Quote came from BB-Odds's lapsed donbest_live feed, a second copy of the book that sat hours stale; the price was probably never live. Outside the totals." };
 const avg = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null);
-function summarize(rows: Bet[]) {
+function summarize(all: Bet[]) {
+  const rows = all.filter((b) => !b.flag);
+  const flagged = all.length - rows.length;
   const settled = rows.filter((b) => SETTLED.has(b.status));
   const clvM = rows.map((b) => b.clv_model).filter((x): x is number => x !== null);
   const staked = settled.reduce((a, b) => a + b.stake, 0);
   const pnl = rows.reduce((a, b) => a + (b.pnl ?? 0), 0);
   return {
-    pending: rows.filter((b) => b.status === "pending").length, settled: settled.length,
+    flagged, pending: rows.filter((b) => b.status === "pending").length, settled: settled.length,
     won: rows.filter((b) => b.status === "won").length, lost: rows.filter((b) => b.status === "lost").length, pushed: rows.filter((b) => b.status === "push").length,
     staked, pnl, roi: staked ? pnl / staked : null,
     avg_ev: avg(rows.filter((b) => b.status !== "void").map((b) => b.ev)),
@@ -37,7 +41,7 @@ function summarize(rows: Bet[]) {
 }
 function breakdown(rows: Bet[], key: (b: Bet) => string) {
   const groups = new Map<string, Bet[]>();
-  for (const b of rows) if (b.status !== "void") groups.set(key(b), [...(groups.get(key(b)) ?? []), b]);
+  for (const b of rows) if (b.status !== "void" && !b.flag) groups.set(key(b), [...(groups.get(key(b)) ?? []), b]);
   return [...groups.entries()].map(([k, bs]) => ({ key: k, ...summarize(bs), n: bs.length })).sort((a, b) => b.n - a.n);
 }
 
@@ -58,7 +62,7 @@ export default function Bets({ bets, reload, onOpen }: { bets: Bet[]; reload: ()
     const bookSet = f.books === null ? null : new Set(f.books);
     const team = f.team.trim().toLowerCase();
     return bets.filter((b) => {
-      if (f.status === "settled" ? !SETTLED.has(b.status) : f.status !== "all" && b.status !== f.status) return false;
+      if (f.status === "flagged" ? !b.flag : f.status === "settled" ? !SETTLED.has(b.status) || !!b.flag : f.status !== "all" && b.status !== f.status) return false;
       if (f.line !== "all" && lineOf(b.market) !== f.line) return false;
       if (f.period !== "all" && periodOf(b.market) !== f.period) return false;
       if (f.source !== "all" && (b.source === "manual" ? "manual" : "auto") !== f.source) return false;
@@ -100,7 +104,7 @@ export default function Bets({ bets, reload, onOpen }: { bets: Bet[]; reload: ()
     <div className="flex h-full min-h-0 flex-col gap-3">
       <div className="grid shrink-0 grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-8">
         <Stat label="Pending" value={s.pending} />
-        <Stat label="Settled" value={s.settled} sub={`${s.won}–${s.lost}–${s.pushed}`} />
+        <Stat label="Settled" value={s.settled} sub={`${s.won}–${s.lost}–${s.pushed}${s.flagged ? ` · ${s.flagged} flagged out` : ""}`} />
         <Stat label="Staked" value={money(s.staked)} />
         <Stat label="P&L" value={money(s.pnl)} tone={s.pnl > 0 ? "text-emerald-300" : s.pnl < 0 ? "text-rose-300" : undefined} />
         <Stat label="ROI" value={s.roi === null ? "—" : signedPct(s.roi)} />
@@ -110,7 +114,7 @@ export default function Bets({ bets, reload, onOpen }: { bets: Bet[]; reload: ()
       </div>
 
       <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-slate-800 bg-slate-900 px-3 py-2">
-        <ChipGroup value={f.status} onChange={(status) => set({ status })} options={[["pending", "Pending"], ["settled", "Settled"], ["won", "Won"], ["lost", "Lost"], ["push", "Push"], ["void", "Void"]]} />
+        <ChipGroup value={f.status} onChange={(status) => set({ status })} options={[["pending", "Pending"], ["settled", "Settled"], ["won", "Won"], ["lost", "Lost"], ["push", "Push"], ["void", "Void"], ["flagged", "Flagged ⚑"]]} />
         <Divider />
         <ChipGroup value={f.line} onChange={(line) => set({ line })} options={LINE_OPTS} />
         <Divider />
@@ -155,7 +159,7 @@ export default function Bets({ bets, reload, onOpen }: { bets: Bet[]; reload: ()
                     <Td className="cursor-pointer text-slate-400 hover:text-slate-200" onClick={() => set({ books: [b.sportsbook] })}><HoverTip tip={<span>{b.sportsbook}{b.source === "manual" ? " · papered by hand" : ""} · click to filter to this book</span>}><span className="inline-flex items-center gap-1.5"><BookBadge name={b.sportsbook} />{b.sportsbook}{b.source === "manual" ? " ✎" : ""}</span></HoverTip></Td>
                     <Td right mono>{fmtAmerican(b.price)}</Td><Td right mono>{money(b.stake)}</Td><Td right mono className="text-slate-400">{pct(b.fair_prob)}</Td>
                     <Td right mono className={evClass(b.ev)}>{signedPct(b.ev)}</Td>
-                    <Td><Pill tone={b.status === "won" ? "green" : b.status === "lost" ? "red" : b.status === "pending" ? "slate" : "amber"}>{b.status}</Pill></Td>
+                    <Td><span className="inline-flex items-center gap-1"><Pill tone={b.status === "won" ? "green" : b.status === "lost" ? "red" : b.status === "pending" ? "slate" : "amber"}>{b.status}</Pill>{b.flag ? <HoverTip tip={<span>{FLAG_TIP[b.flag] ?? b.flag}{b.note ? <><br />{b.note}</> : null}</span>}><Pill tone="amber">⚑ {b.flag.replace("_", " ")}</Pill></HoverTip> : null}</span></Td>
                     <Td right mono className={(b.pnl ?? 0) > 0 ? "text-emerald-300" : (b.pnl ?? 0) < 0 ? "text-rose-300" : "text-slate-500"}>{b.pnl === null ? "—" : money(b.pnl)}</Td>
                     <Td right mono className="text-slate-400">{pct(b.closing_fair_prob)}</Td>
                     <Td right mono className={b.clv_model === null ? "text-slate-600" : b.clv_model > 0 ? "text-emerald-300" : "text-rose-300"}>{signedPct(b.clv_model)}</Td>

@@ -88,7 +88,11 @@ subscription), a second copy of books OddsLogic has live (BetOnline 1393 beside
 MTL −1.5 showed BetOnline +174 (DonBest, 04:14) next to +157 (OddsLogic, 09:31)
 and 80% of the board was those rows. `books_active_only` adds BB-Odds's own
 grid rule (`sportsbooks.active`, what Top Bets uses); it is off because the
-operator keeps the exchanges and per-head books off that grid. Games
+operator keeps the exchanges and per-head books off that grid. The 45 paper
+bets placed on those rows carry `paper_bets.flag = 'stale_feed'` (migration
+007): the 4 open ones were voided, the 41 settled stay in the ledger with a ⚑
+pill but are outside the summary, the by-market table and Results (they are
+reported under `summary.flagged`). Games
 the worker cannot price in a pass lose their edges, and `/edges` only
 returns rows from the last 20 minutes, so nothing survives a model change.
 The API gzips responses (the raw board is ~3 MB) and `useApi` keeps the last payload per path for the session, so a tab switch renders at once and refreshes behind (timer and worker pushes within 15 s of a load are coalesced). The three filter bars persist to `localStorage`; an empty books list

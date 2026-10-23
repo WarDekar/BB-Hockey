@@ -193,8 +193,9 @@ def void(bet_id: int) -> dict:
 def results(days: int = 14) -> List[dict]:
     return _rows("""
         SELECT g.*, s.summary AS closing_summary, s.inputs AS closing_inputs,
-               (SELECT count(*) FROM paper_bets b WHERE b.game_id = g.id AND b.status <> 'void') AS n_bets,
-               (SELECT COALESCE(sum(pnl), 0) FROM paper_bets b WHERE b.game_id = g.id) AS pnl
+               (SELECT count(*) FROM paper_bets b WHERE b.game_id = g.id AND b.status <> 'void' AND b.flag IS NULL) AS n_bets,
+               (SELECT COALESCE(sum(pnl), 0) FROM paper_bets b WHERE b.game_id = g.id AND b.flag IS NULL) AS pnl,
+               (SELECT count(*) FROM paper_bets b WHERE b.game_id = g.id AND b.flag IS NOT NULL) AS n_flagged
         FROM games g
         LEFT JOIN LATERAL (SELECT summary, inputs FROM pricing_snapshots p WHERE p.game_id = g.id AND p.kind = 'closing'
                            ORDER BY computed_at DESC LIMIT 1) s ON true

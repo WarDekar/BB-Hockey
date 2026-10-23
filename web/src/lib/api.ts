@@ -54,12 +54,13 @@ export interface GameDetail { game: Game; snapshot: Snapshot | null; closing: Sn
 export interface Bet {
   id: number; game_id: number; market: string; side: string; point: number | null; sportsbook: string; price: number; stake: number; fair_prob: number; push_prob: number;
   ev: number; kelly: number | null; source: string; placed_at: string; status: string; pnl: number | null; settled_at: string | null; closing_fair_prob: number | null;
-  closing_price: number | null; clv_model: number | null; clv_price: number | null; note: string | null;
+  closing_price: number | null; clv_model: number | null; clv_price: number | null; note: string | null; flag?: string | null;
   home_name?: string; away_name?: string; home_rotation?: number | null; away_rotation?: number | null; home_abbr?: string | null; away_abbr?: string | null; game_time?: string; final_home?: number | null; final_away?: number | null; game_status?: string;
 }
 export interface BetSummary {
   pending: number; settled: number; won: number; lost: number; pushed: number; staked: number; pnl: number; roi: number | null;
   avg_clv_model: number | null; avg_clv_price: number | null; clv_model_pos: number; clv_model_n: number; avg_ev: number | null;
+  flagged?: { n: number; pnl: number; voided: number };
   by_market: { market: string; n: number; won: number; lost: number; staked: number; pnl: number; avg_clv_model: number | null; avg_ev: number | null }[];
 }
 export interface Health { status: string; version: string; heartbeats: Record<string, { job: string; last_run_at: string; ok: boolean; note: string }>; counts: { games: number; finals: number; pending_bets: number; snapshots: number }; paper: { auto: boolean; min_edge: number; kelly_fraction: number } }
