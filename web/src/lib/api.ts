@@ -63,7 +63,7 @@ export interface BetSummary {
   flagged?: { n: number; pnl: number; voided: number };
   by_market: { market: string; n: number; won: number; lost: number; staked: number; pnl: number; avg_clv_model: number | null; avg_ev: number | null }[];
 }
-export interface Health { status: string; version: string; heartbeats: Record<string, { job: string; last_run_at: string; ok: boolean; note: string }>; counts: { games: number; finals: number; pending_bets: number; snapshots: number }; paper: { auto: boolean; min_edge: number; kelly_fraction: number } }
+export interface Health { status: string; version: string; heartbeats: Record<string, { job: string; last_run_at: string; ok: boolean; note: string }>; counts: { games: number; finals: number; pending_bets: number; snapshots: number }; paper: { auto: boolean; min_edge: number; kelly_fraction: number; exclude?: string[] } }
 export interface Calibration {
   buckets: { b: number; n: number; mean_prob: number; hit: number; brier: number }[];
   by_family: { family: string; n: number; mean_prob: number; hit: number; brier: number; bias: number }[];

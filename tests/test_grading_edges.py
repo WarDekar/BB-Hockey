@@ -56,3 +56,16 @@ def test_evaluate_quotes_sides_and_best():
     assert best[("puck", "home", -1.5)]["sportsbook"] == "B"   # +230 beats +200 at the same fair prob
     over = next(r for r in rows if r["market"] == "p1_total" and r["side"] == "over")
     assert over["point"] == 1.5 and 0 < over["fair_prob"] < 1
+
+
+def test_auto_paper_exclude_falls_to_next_book(monkeypatch):
+    from bb_hockey import paper
+    from bb_hockey.config import settings
+    monkeypatch.setattr(settings, "auto_paper_exclude", ("Bet105:puck",))
+    rows = [{"market": "puck", "side": "away", "point": -1.5, "sportsbook": "Bet105", "ev": 0.08},
+            {"market": "puck", "side": "away", "point": -1.5, "sportsbook": "Pinnacle", "ev": 0.04},
+            {"market": "total", "side": "over", "point": 6.0, "sportsbook": "Bet105", "ev": 0.05}]
+    kept = [r for r in rows if not paper.auto_excluded(r)]
+    best = best_per_side(kept)
+    assert best[("puck", "away", -1.5)]["sportsbook"] == "Pinnacle"      # Bet105's spread is skipped, not the side
+    assert best[("total", "over", 6.0)]["sportsbook"] == "Bet105"        # its totals are fine

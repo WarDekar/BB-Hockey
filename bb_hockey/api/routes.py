@@ -41,7 +41,8 @@ def health() -> dict:
         if not h or not h["ok"] or (datetime.now(timezone.utc) - h["last_run_at"]).total_seconds() > within:
             status = "degraded"
     return {"status": status, "version": __version__, "heartbeats": hb, "counts": counts,
-            "paper": {"auto": settings.auto_paper, "min_edge": settings.min_edge, "kelly_fraction": settings.kelly_fraction}}
+            "paper": {"auto": settings.auto_paper, "min_edge": settings.min_edge, "kelly_fraction": settings.kelly_fraction,
+                      "exclude": list(settings.auto_paper_exclude)}}
 
 
 _teams_cache: dict = {"at": None, "rows": None}

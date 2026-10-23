@@ -40,6 +40,10 @@ class Settings(BaseSettings):
     # bb_poly.poly_markets when present; otherwise (and for Kalshi) the mid is worsened by this many probability points.
     exchange_mid_books: tuple = ("Polymarket", "Kalshi")
     exchange_haircut_prob: float = 0.025
+    # Book:market pairs auto-paper skips (the side falls to the next-best book); "Book:*" is every market.
+    # Bet105's spreads alternate between two line sets every push in BB-Odds (handoff 2026-10-21), so a
+    # +220 there may be +212 on the site; off the list once BB-Odds keeps one line set per book.
+    auto_paper_exclude: tuple = ("Bet105:puck", "Bet105:p1_spread", "Bet105:p2_spread", "Bet105:p3_spread")
 
     devig_method: str = "shin"
 

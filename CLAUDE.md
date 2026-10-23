@@ -197,6 +197,10 @@ NHL.com codes (LAK, NJD, SJS, TBL) map to the ESPN ones before lookup.
    (team pace spans ±4%) and the historical set is indifferent between 0
    and 1, so 0.5 is a structural prior, worth about ±0.4 points on the
    alternates at 7.0 or 5.5 lines.
+   **Auto-paper skips Bet105's spreads** (`auto_paper_exclude`, 2026-10-23): BB-Odds
+   writes two line sets for Bet105 spreads and alternates them every push (handoff
+   2026-10-21), so the side falls to the next-best book; the quotes still show on
+   the Edges tab. Clear the setting once BB-Odds keeps one line set per book.
    **Exchange quotes are mids.** BB-Odds stores Polymarket (ids 700/761) and
    Kalshi (760) at the bid/ask midpoint (the ±1.5 pair shows identical
    prices), which BB-Odds's own notes call phantom +EV; `edges.py` applies a

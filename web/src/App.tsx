@@ -10,6 +10,7 @@ import { Button, Empty, ErrorBox } from "./components/Primitives";
 import Results from "./components/Results";
 import { useApi, useHash } from "./hooks";
 import { useTeams } from "./lib/teams";
+import { HoverTip } from "./components/HoverTip";
 import type { Bet, BetSummary, Calibration as Calib, Edge, GameDetail as Detail, Health, Params as P, ResultRow, SlateRow } from "./lib/api";
 import { ago, money } from "./lib/format";
 
@@ -66,7 +67,7 @@ export default function App() {
             <span title={settlement?.note ?? ""}>settled {ago(settlement?.last_run_at)}</span>
             {health.data && <span><span className="text-slate-600">pending</span> <span className="font-mono text-slate-300">{health.data.counts.pending_bets}</span></span>}
             {health.data && <span><span className="text-slate-600">finals</span> <span className="font-mono text-slate-300">{health.data.counts.finals}</span></span>}
-            {health.data && <span className={health.data.paper.auto ? "text-slate-400" : "text-amber-300"}>auto-paper {health.data.paper.auto ? `≥ ${(minEdge * 100).toFixed(0)}%` : "off"}</span>}
+            {health.data && <HoverTip tip={health.data.paper.exclude?.length ? <span>Auto-paper skips {health.data.paper.exclude.join(", ")} (the side falls to the next-best book). Bet105's spreads alternate between two line sets in BB-Odds; off the list once that feed is fixed.</span> : null}><span className={health.data.paper.auto ? "text-slate-400" : "text-amber-300"}>auto-paper {health.data.paper.auto ? `≥ ${(minEdge * 100).toFixed(0)}%` : "off"}{health.data.paper.exclude?.length ? <span className="ml-1 text-amber-300/80">· {new Set(health.data.paper.exclude.map((x) => x.split(":")[0])).size} book excl.</span> : null}</span></HoverTip>}
           </span>
         </div>
       </header>

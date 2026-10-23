@@ -15,6 +15,12 @@ BANKROLL_UNITS = 100.0
 AUTO_EXCLUDED_MARKETS = {"ml"}  # the ML is the model's input; a book off the consensus is BB-Odds's job
 
 
+def auto_excluded(row: dict) -> bool:
+    """True when ``settings.auto_paper_exclude`` names this book for this market (``Book:market`` or ``Book:*``)."""
+    book = row.get("sportsbook")
+    return f"{book}:{row.get('market')}" in settings.auto_paper_exclude or f"{book}:*" in settings.auto_paper_exclude
+
+
 def stake_units(kelly_full: float) -> float:
     return round(min(settings.max_stake_units, max(0.0, kelly_full * settings.kelly_fraction * BANKROLL_UNITS)), 3)
 
@@ -27,7 +33,7 @@ def auto_paper(c: Connection, game: dict, rows: List[dict], snapshot_id: int) ->
     placed = []
     existing = {(r[0], r[1], r[2]) for r in c.execute(text(
         "SELECT market, side, point FROM paper_bets WHERE game_id = :g AND status <> 'void'"), {"g": game["id"]})}
-    for (market, side, point), r in best_per_side(rows).items():
+    for (market, side, point), r in best_per_side([r for r in rows if not auto_excluded(r)]).items():
         if market in AUTO_EXCLUDED_MARKETS or not (settings.min_edge <= r["ev"] <= settings.max_edge):
             continue
         if (market, side, point) in existing:
