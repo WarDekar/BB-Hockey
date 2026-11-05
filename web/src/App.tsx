@@ -78,7 +78,7 @@ export default function App() {
         ) : tab === "board" ? (
           slate.error ? <ErrorBox error={slate.error} /> : slate.data ? <Board rows={slate.data} onOpen={open} /> : <Empty>Loading…</Empty>
         ) : tab === "edges" ? (
-          edges.error ? <ErrorBox error={edges.error} /> : edges.data ? <Edges rows={edges.data} minEdge={minEdge} onOpen={open} /> : <Empty>Loading…</Empty>
+          edges.error ? <ErrorBox error={edges.error} /> : edges.data ? null : <Empty>Loading…</Empty>
         ) : tab === "bets" ? (
           bets.error ? <ErrorBox error={bets.error} /> : bets.data ? <Bets bets={bets.data} reload={() => { bets.reload(); betSummary.reload(); }} onOpen={open} /> : <Empty>Loading…</Empty>
         ) : tab === "results" ? (
@@ -90,6 +90,9 @@ export default function App() {
         ) : (
           params.error ? <ErrorBox error={params.error} /> : params.data ? <Params data={params.data} reload={params.reload} /> : <Empty>Loading…</Empty>
         )}
+        {/* The Edges table (thousands of rows at a low min-EV) stays mounted once it has rendered and is hidden on the
+            other tabs: coming back is a display toggle with the scroll position and filters intact, not a remount. */}
+        {edges.data && <div className={tab === "edges" && !gameId ? "contents" : "hidden"}><Edges rows={edges.data} minEdge={minEdge} onOpen={open} /></div>}
       </main>
       <footer className="shrink-0 px-6 py-3 text-[11px] text-slate-600">BB-Hockey · slot 18 · paper only · fairs from a diagonal-inflated Poisson fitted to BB-Odds's devigged consensus ML + total · P&L {money(betSummary.data?.pnl ?? null)}</footer>
     </div>

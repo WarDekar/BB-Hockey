@@ -95,7 +95,10 @@ pill but are outside the summary, the by-market table and Results (they are
 reported under `summary.flagged`). Games
 the worker cannot price in a pass lose their edges, and `/edges` only
 returns rows from the last 20 minutes, so nothing survives a model change.
-The API gzips responses (the raw board is ~3 MB) and `useApi` keeps the last payload per path for the session, so a tab switch renders at once and refreshes behind (timer and worker pushes within 15 s of a load are coalesced). The three filter bars persist to `localStorage`; an empty books list
+The API gzips responses (the raw board is ~3 MB) and `useApi` keeps the last payload per path for the session, so a tab switch renders at once and refreshes behind (timer and worker pushes within 15 s of a load are coalesced). The Edges table
+stays mounted (hidden) once it has rendered, so a tab switch and back is a
+display toggle with scroll and filters intact, and it renders 500 rows at a
+time with a show-more footer (a full slate is ~9k rows × 17 cells). The three filter bars persist to `localStorage`; an empty books list
 ("None") is never restored (it comes back as all books), because a saved
 empty selection showed "0 of 3,668" with a misleading min-EV message.
 

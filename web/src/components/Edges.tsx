@@ -12,6 +12,7 @@ import { ChipGroup, Divider, LINE_OPTS, MultiSelect, PERIOD_OPTS, inputClass, li
 interface Filters { line: string; period: string; side: string; papered: string; books: string[] | null; day: string; team: string; min: number | null; source: string }
 const DEFAULT: Filters = { line: "all", period: "all", side: "all", papered: "all", books: null, day: "all", team: "", min: null, source: "all" };
 const KEY = "bbh_edges_filters_v1";
+const PAGE = 500;   // rows rendered at once; the footer adds more (17 cells a row, 9k rows on a full slate)
 // An empty books list ("None") is a step toward picking a few, never a view worth restoring: it comes back as all books.
 const load = (): Filters => { try { const f = { ...DEFAULT, ...JSON.parse(localStorage.getItem(KEY) || "{}"), team: "" }; if (Array.isArray(f.books) && f.books.length === 0) f.books = null; return f; } catch { return DEFAULT; } };
 
@@ -53,6 +54,9 @@ export default function Edges({ rows, minEdge, onOpen }: { rows: Edge[]; minEdge
       && teamMatch(team, r));
   }, [rows, f, min]);
   const active = JSON.stringify({ ...f, team: "" }) !== JSON.stringify(DEFAULT) || f.team.trim() !== "";
+  const [limit, setLimit] = useState(PAGE);
+  useEffect(() => { setLimit(PAGE); }, [f]);
+  const visible = shown.length > limit ? shown.slice(0, limit) : shown;
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-3">
@@ -88,7 +92,7 @@ export default function Edges({ rows, minEdge, onOpen }: { rows: Edge[]; minEdge
             <table className="w-full text-xs">
               <thead className="sticky top-0 z-[1] bg-slate-900 shadow-[0_1px_0_0_var(--color-slate-800)]"><tr><Th right>Away</Th><Th className="text-center">@</Th><Th>Home</Th><Th>Start</Th><Th>Market</Th><Th>Side</Th><Th>Book</Th><Th right>Price</Th><Th right>Fair</Th><Th right>Fair prob</Th><Th right>Base prob</Th><Th right>Bench adj</Th><Th right>EV</Th><Th right>Base EV</Th><Th right>¼ Kelly</Th><Th right>Quoted</Th><Th></Th></tr></thead>
               <tbody>
-                {shown.map((e) => (
+                {visible.map((e) => (
                   <tr key={e.id} className="border-t border-slate-800/60 hover:bg-slate-800/40">
                     <Td right className="cursor-pointer font-medium text-slate-100" onClick={() => onOpen(e.game_id)}><TeamTag abbr={e.away_abbr} name={e.away_name} rotation={e.away_rotation} pad align="right" /></Td>
                     <Td className="cursor-pointer px-1 text-center text-slate-500" onClick={() => onOpen(e.game_id)}>@</Td>
@@ -107,6 +111,13 @@ export default function Edges({ rows, minEdge, onOpen }: { rows: Edge[]; minEdge
                 ))}
               </tbody>
             </table>
+            {shown.length > visible.length && (
+              <div className="flex items-center gap-3 px-2 py-2 text-[11px] text-slate-500">
+                <span>showing <span className="font-mono text-slate-300">{visible.length.toLocaleString()}</span> of {shown.length.toLocaleString()} · sorted by the API (EV desc)</span>
+                <button onClick={() => setLimit((l) => l + PAGE)} className="text-accent hover:underline">show {Math.min(PAGE, shown.length - visible.length).toLocaleString()} more</button>
+                <button onClick={() => setLimit(shown.length)} className="text-accent hover:underline">show all</button>
+              </div>
+            )}
           </div>
         )}
       </Panel>
