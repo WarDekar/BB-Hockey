@@ -129,7 +129,9 @@ def game_detail(game_id: int) -> dict:
 
 
 @router.get("/edges")
-def edges(min_ev: Optional[float] = None, limit: int = 5000) -> List[dict]:
+def edges(min_ev: Optional[float] = None, limit: Optional[int] = Query(None, ge=1)) -> List[dict]:
+    """Every evaluated quote above ``min_ev`` (default: the auto-paper threshold), EV desc. Uncapped unless ``limit``
+    is given: a full slate is ~9k rows at ``min_ev=-1`` and the browser pages the table itself (``/board`` is what it loads)."""
     return edges_rows(hockey_engine(), min_ev, limit)
 
 

@@ -113,8 +113,8 @@ The 60-second refetch timer for the Board and Edges tabs is gone; `/slate` and
 
 `edges` holds **every** evaluated quote of the latest pass per game (EV
 down to `store_min_ev` −1.0, capped at `max_edge`), not just positive ones:
-the Edges tab fetches `/edges?min_ev=-1` and its min-EV box (can go
-negative) filters, so the books dropdown lists the whole board. Pregame
+the Edges tab reads the whole board at that floor (`/board`, then socket deltas) and its min-EV box (can go
+negative) filters, so the books dropdown lists the whole board; `/edges` is uncapped unless `?limit=` is given (2026-11-05). Pregame
 quotes count for `quote_max_age_min` = 720 minutes: `current.odds` is each
 book's standing line and Pinnacle/DK/Bet365 go hours without a change, so a
 30-minute window (the original) silently dropped most of the board.
