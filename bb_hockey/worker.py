@@ -10,6 +10,7 @@ from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
 from . import odds_reader, pbp
+from .board import BOARD
 from .config import settings
 from .edges import evaluate_quotes, positive_edges
 from .teams import nhl_abbr, resolve
@@ -76,8 +77,13 @@ def pricing_pass(odds: Engine, hockey: Engine, params: Optional[ModelParams] = N
     note = f"{len(games)} games, {priced} priced ({fresh} new snapshots), {n_edges} edges ≥ {settings.min_edge:.0%}, {len(placed)} auto bets"
     heartbeat(hockey, "pricing", True, note)
     logger.info("pricing pass: %s", note)
+    try:
+        board = BOARD.delta(hockey)   # what the tabs need to hear: only the rows that moved
+    except Exception as e:  # noqa: BLE001
+        logger.exception("board delta failed: %s", e)
+        board = None
     return {"games": len(games), "priced": priced, "new_snapshots": fresh, "edges": n_edges, "placed": placed,
-            "top": sorted(top, key=lambda r: -r["ev"])[:10], "at": datetime.now(timezone.utc).isoformat()}
+            "top": sorted(top, key=lambda r: -r["ev"])[:10], "at": datetime.now(timezone.utc).isoformat(), "board": board}
 
 
 def settlement_pass(odds: Engine, hockey: Engine, params: Optional[ModelParams] = None) -> dict:
@@ -111,6 +117,8 @@ async def run_forever(odds: Engine, hockey: Engine, on_update: Optional[Callable
                 result = await asyncio.to_thread(fn, odds, hockey)
                 if on_update:
                     await on_update({"job": job, **{k: v for k, v in result.items() if k != "top"}, "top": result.get("top", [])})
+                elif result.get("board"):
+                    result.pop("board")
             except Exception as e:  # noqa: BLE001
                 logger.exception("%s pass failed: %s", job, e)
                 try:

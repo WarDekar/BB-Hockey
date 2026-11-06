@@ -39,6 +39,9 @@ async def lifespan(app: FastAPI):
     task = None
     if os.environ.get("BB_HOCKEY_WORKER", "1") not in ("0", "false", "no"):
         async def push(update: dict):
+            board = update.pop("board", None)
+            if board:
+                await sio.emit("board", board)      # per-pass delta: only the rows that moved (see bb_hockey/board.py)
             await sio.emit("update", update)
         task = asyncio.create_task(run_forever(odds_engine(), hockey_engine(), push))
         logger.info("worker started (pricing every %ss, settlement every %ss)", settings.price_interval, settings.settle_interval)

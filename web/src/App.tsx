@@ -9,6 +9,7 @@ import Pulls from "./components/Pulls";
 import { Button, Empty, ErrorBox } from "./components/Primitives";
 import Results from "./components/Results";
 import { useApi, useHash } from "./hooks";
+import { useBoard } from "./lib/board";
 import { useTeams } from "./lib/teams";
 import { HoverTip } from "./components/HoverTip";
 import type { Bet, BetSummary, Calibration as Calib, Edge, GameDetail as Detail, Health, Params as P, ResultRow, SlateRow } from "./lib/api";
@@ -23,8 +24,7 @@ export default function App() {
   const tab: Tab = (TABS as readonly string[]).includes(hash) ? (hash as Tab) : "board";
   useTeams();   // one subscription for the tree: cells read the store directly (thousands of per-cell hooks were the Edges render cost)
   const health = useApi<Health>("/health", 30000);
-  const slate = useApi<SlateRow[]>(tab === "board" ? "/slate" : null, 60000);
-  const edges = useApi<Edge[]>(tab === "edges" ? "/edges?min_ev=-1" : null, 60000);   // the whole board; the tab's min-EV box filters
+  const board = useBoard();   // slate + every evaluated quote: one fetch per session, then socket deltas (lib/board.ts)
   const bets = useApi<Bet[]>(tab === "bets" ? "/bets?limit=5000" : null, 60000);
   const betSummary = useApi<BetSummary>(tab === "bets" ? "/bets/summary" : null, 60000);
   const results = useApi<ResultRow[]>(tab === "results" ? "/results?days=365" : null, 120000);
@@ -76,9 +76,9 @@ export default function App() {
         {gameId ? (
           detail.error ? <ErrorBox error={detail.error} /> : detail.data ? <GameDetail detail={detail.data} reload={detail.reload} minEdge={minEdge} /> : <Empty>Loading…</Empty>
         ) : tab === "board" ? (
-          slate.error ? <ErrorBox error={slate.error} /> : slate.data ? <Board rows={slate.data} onOpen={open} /> : <Empty>Loading…</Empty>
+          board.error && !board.ready ? <ErrorBox error={board.error} /> : board.ready ? <Board rows={board.slate} onOpen={open} /> : <Empty>Loading…</Empty>
         ) : tab === "edges" ? (
-          edges.error ? <ErrorBox error={edges.error} /> : edges.data ? null : <Empty>Loading…</Empty>
+          board.error && !board.ready ? <ErrorBox error={board.error} /> : board.ready ? null : <Empty>Loading…</Empty>
         ) : tab === "bets" ? (
           bets.error ? <ErrorBox error={bets.error} /> : bets.data ? <Bets bets={bets.data} reload={() => { bets.reload(); betSummary.reload(); }} onOpen={open} /> : <Empty>Loading…</Empty>
         ) : tab === "results" ? (
@@ -92,7 +92,7 @@ export default function App() {
         )}
         {/* The Edges table (thousands of rows at a low min-EV) stays mounted once it has rendered and is hidden on the
             other tabs: coming back is a display toggle with the scroll position and filters intact, not a remount. */}
-        {edges.data && <div className={tab === "edges" && !gameId ? "contents" : "hidden"}><Edges rows={edges.data} minEdge={minEdge} onOpen={open} /></div>}
+        {board.ready && <div className={tab === "edges" && !gameId ? "contents" : "hidden"}><Edges rows={board.edges} minEdge={minEdge} onOpen={open} /></div>}
       </main>
       <footer className="shrink-0 px-6 py-3 text-[11px] text-slate-600">BB-Hockey · slot 18 · paper only · fairs from a diagonal-inflated Poisson fitted to BB-Odds's devigged consensus ML + total · P&L {money(betSummary.data?.pnl ?? null)}</footer>
     </div>

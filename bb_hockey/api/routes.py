@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import text
 
 from .. import __version__, calibration, odds_reader, paper, pbp
+from ..board import BOARD, edges_rows, slate_rows
 from ..config import settings
 from ..db import hockey_engine, odds_engine
 from ..edges import best_per_side, evaluate_quotes
@@ -74,24 +75,19 @@ def teams() -> List[dict]:
 
 @router.get("/slate")
 def slate(hours_back: int = 14, hours_ahead: Optional[int] = None) -> List[dict]:
-    hours_ahead = hours_ahead or settings.slate_hours_ahead
-    now = datetime.now(timezone.utc)
-    games = _rows("""
-        SELECT g.*, s.id AS snapshot_id, s.computed_at AS priced_at, s.inputs, s.summary,
-               (SELECT count(*) FROM edges e WHERE e.game_id = g.id AND e.ev >= :min_edge) AS n_edges,
-               (SELECT max(ev) FROM edges e WHERE e.game_id = g.id) AS best_ev,
-               (SELECT count(*) FROM paper_bets b WHERE b.game_id = g.id AND b.status <> 'void') AS n_bets,
-               (SELECT COALESCE(sum(pnl), 0) FROM paper_bets b WHERE b.game_id = g.id) AS pnl
-        FROM games g
-        LEFT JOIN LATERAL (SELECT id, computed_at, inputs, summary FROM pricing_snapshots p
-                           WHERE p.game_id = g.id AND p.kind = 'live' ORDER BY computed_at DESC LIMIT 1) s ON true
-        WHERE g.game_time BETWEEN :lo AND :hi ORDER BY g.game_time, g.id
-    """, lo=now - timedelta(hours=hours_back), hi=now + timedelta(hours=hours_ahead), min_edge=settings.min_edge)
-    notes = pbp.notes_by_team(hockey_engine())
-    for g in games:
-        g["home_bench"] = notes.get(nhl_abbr(g.get("home_abbr")))
-        g["away_bench"] = notes.get(nhl_abbr(g.get("away_abbr")))
-    return games
+    return slate_rows(hockey_engine(), hours_back, hours_ahead)
+
+
+@router.get("/board")
+def board() -> dict:
+    """The whole board for a fresh client: every evaluated quote (EV down to store_min_ev) + the slate + the
+    delta version to resume from. After this the client follows the ``board`` socket deltas (bb_hockey/board.py)."""
+    return BOARD.snapshot(hockey_engine())
+
+
+@router.get("/board/version")
+def board_version() -> dict:
+    return BOARD.version()
 
 
 class ManualBet(BaseModel):
@@ -134,16 +130,7 @@ def game_detail(game_id: int) -> dict:
 
 @router.get("/edges")
 def edges(min_ev: Optional[float] = None, limit: int = 5000) -> List[dict]:
-    min_ev = settings.min_edge if min_ev is None else min_ev
-    return _rows("""
-        SELECT e.*, g.home_name, g.away_name, g.home_abbr, g.away_abbr, g.home_rotation, g.away_rotation, g.game_time, g.status,
-               EXISTS (SELECT 1 FROM paper_bets b WHERE b.game_id = e.game_id AND b.market = e.market AND b.side = e.side
-                       AND b.point IS NOT DISTINCT FROM e.point AND b.status <> 'void') AS papered
-        FROM edges e JOIN games g ON g.id = e.game_id
-        WHERE e.ev >= :min_ev AND g.status = 'pregame' AND g.game_time > now()
-          AND e.computed_at > now() - interval '20 minutes'   -- only edges from a pass the current model made
-        ORDER BY e.ev DESC LIMIT :lim
-    """, min_ev=min_ev, lim=limit)
+    return edges_rows(hockey_engine(), min_ev, limit)
 
 
 @router.get("/bets")

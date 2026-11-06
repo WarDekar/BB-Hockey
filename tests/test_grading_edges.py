@@ -69,3 +69,28 @@ def test_auto_paper_exclude_falls_to_next_book(monkeypatch):
     best = best_per_side(kept)
     assert best[("puck", "away", -1.5)]["sportsbook"] == "Pinnacle"      # Bet105's spread is skipped, not the side
     assert best[("total", "over", 6.0)]["sportsbook"] == "Bet105"        # its totals are fine
+
+
+def test_board_delta_only_moved_rows():
+    from bb_hockey.board import compute_delta, _with_keys
+    a = {"game_id": 1, "period_src": "game", "market": "puck", "side": "home", "point": -1.5, "sportsbook_id": 7, "ev": 0.04, "price": 150, "id": 10, "computed_at": "t1"}
+    b = {"game_id": 1, "period_src": "game", "market": "puck", "side": "home", "point": -1.5, "sportsbook_id": 8, "ev": 0.02, "price": 140, "id": 11, "computed_at": "t1"}
+    g = {"id": 1, "home_name": "X", "updated_at": "t1", "n_edges": 2}
+    d0, e_sig, s_sig = compute_delta({}, {}, _with_keys([a, b]), [g])
+    assert len(d0["edges_upsert"]) == 2 and d0["slate_upsert"] == [g]
+    # next pass: same content, new table ids and timestamps → nothing moved
+    a2, b2 = dict(a, id=20, computed_at="t2"), dict(b, id=21, computed_at="t2")
+    d1, e_sig, s_sig = compute_delta(e_sig, s_sig, _with_keys([a2, b2]), [dict(g, updated_at="t2")])
+    assert not any(d1.values())
+    # a price moves, a book drops, the game's edge count changes
+    a3 = dict(a2, price=155, ev=0.05)
+    d2, _, _ = compute_delta(e_sig, s_sig, _with_keys([a3]), [dict(g, n_edges=1)])
+    assert [r["price"] for r in d2["edges_upsert"]] == [155] and d2["edges_delete"] == [_with_keys([b])[0]["key"]]
+    assert d2["slate_upsert"][0]["n_edges"] == 1 and d2["slate_delete"] == []
+
+
+def test_board_keys_split_duplicate_quotes():
+    from bb_hockey.board import _with_keys
+    r = {"game_id": 1, "period_src": "game", "market": "puck", "side": "away", "point": 1.5, "sportsbook_id": 716}
+    keys = [x["key"] for x in _with_keys([dict(r, price=212), dict(r, price=220)])]
+    assert len(set(keys)) == 2 and keys[0].endswith("|0") and keys[1].endswith("|1")
