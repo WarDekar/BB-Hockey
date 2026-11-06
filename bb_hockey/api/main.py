@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import json
 import os
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -38,11 +39,15 @@ async def lifespan(app: FastAPI):
     run_migrations()
     task = None
     if os.environ.get("BB_HOCKEY_WORKER", "1") not in ("0", "false", "no"):
+        def _json_safe(o):
+            # edge rows carry datetimes (quoted_at); socket.io's encoder is plain json
+            return json.loads(json.dumps(o, default=lambda v: v.isoformat() if hasattr(v, "isoformat") else str(v)))
+
         async def push(update: dict):
             board = update.pop("board", None)
             if board:
-                await sio.emit("board", board)      # per-pass delta: only the rows that moved (see bb_hockey/board.py)
-            await sio.emit("update", update)
+                await sio.emit("board", _json_safe(board))      # per-pass delta: only the rows that moved (see bb_hockey/board.py)
+            await sio.emit("update", _json_safe(update))
         task = asyncio.create_task(run_forever(odds_engine(), hockey_engine(), push))
         logger.info("worker started (pricing every %ss, settlement every %ss)", settings.price_interval, settings.settle_interval)
     yield
