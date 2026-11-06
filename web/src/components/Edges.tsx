@@ -9,8 +9,8 @@ import { ChipGroup, Divider, LINE_OPTS, MultiSelect, PERIOD_OPTS, inputClass, li
 
 // Same composable bar as the Bets tab. Edges are pregame-only by construction
 // (the API drops started games), so the date group is just today / tomorrow / later.
-interface Filters { line: string; period: string; side: string; papered: string; books: string[] | null; day: string; team: string; min: number | null; source: string }
-const DEFAULT: Filters = { line: "all", period: "all", side: "all", papered: "all", books: null, day: "all", team: "", min: null, source: "all" };
+interface Filters { line: string; period: string; side: string; papered: string; books: string[] | null; day: string; team: string; min: number | null; source: string; stale: string }
+const DEFAULT: Filters = { line: "all", period: "all", side: "all", papered: "all", books: null, day: "all", team: "", min: null, source: "all", stale: "all" };
 const KEY = "bbh_edges_filters_v1";
 const PAGE = 500;   // rows rendered at once; the footer adds more (17 cells a row, 9k rows on a full slate)
 // An empty books list ("None") is a step toward picking a few, never a view worth restoring: it comes back as all books.
@@ -48,6 +48,7 @@ export default function Edges({ rows, minEdge, onOpen }: { rows: Edge[]; minEdge
       && (f.period === "all" || periodOf(r.market) === f.period)
       && (f.side === "all" || sideOf(r.side) === f.side)
       && (f.papered === "all" || (f.papered === "papered") === r.papered)
+      && (f.stale === "all" || (f.stale === "stale") === !!r.stale)
       && (f.source === "all" || (f.source === "against" ? (adjOf(r) ?? 0) < -0.005 : sourceOf(r, min) === f.source))
       && (!bookSet || bookSet.has(r.sportsbook))
       && (f.day === "all" || dayOf(r.game_time) === f.day)
@@ -72,6 +73,8 @@ export default function Edges({ rows, minEdge, onOpen }: { rows: Edge[]; minEdge
         <ChipGroup value={f.side} onChange={(side) => set({ side })} options={[["team", "Team"], ["over", "Over"], ["under", "Under"]]} />
         <Divider />
         <ChipGroup value={f.papered} onChange={(papered) => set({ papered })} options={[["papered", "Papered"], ["open", "Open"]]} />
+        <Divider />
+        <ChipGroup value={f.stale} onChange={(stale) => set({ stale })} options={[["fresh", "Fresh"], ["stale", "Stale"]]} />
         <Divider />
         <ChipGroup value={f.source} onChange={(source) => set({ source })} options={[["coach", "Bench-driven"], ["market", "At baseline too"], ["against", "Adj. against"]]} />
         <Divider />
@@ -103,10 +106,11 @@ export default function Edges({ rows, minEdge, onOpen }: { rows: Edge[]; minEdge
                     <Td right mono title={e.push_prob ? `push ${pct(e.push_prob)}` : undefined}>{pct(e.fair_prob)}</Td>
                     <Td right mono className="text-slate-400" title="league-average benches, same ML and total">{e.base_prob === null || e.base_prob === undefined ? "—" : pct(e.base_prob)}</Td>
                     <Td right mono className={(adjOf(e) ?? 0) > 0.005 ? "text-ice" : (adjOf(e) ?? 0) < -0.005 ? "text-amber-300" : "text-slate-500"} title="fair prob minus baseline: what the two benches add">{adjOf(e) === null ? "—" : signedPct(adjOf(e))}</Td>
-                    <Td right mono className={evClass(e.ev)}>{signedPct(e.ev)}</Td>
+                    <Td right mono className={e.stale ? "text-slate-500 line-through decoration-slate-600" : evClass(e.ev)}>{signedPct(e.ev)}</Td>
                     <Td right mono className={e.base_ev === null || e.base_ev === undefined ? "text-slate-600" : e.base_ev >= min ? "text-emerald-400/70" : "text-slate-500"}>{e.base_ev === null || e.base_ev === undefined ? "—" : signedPct(e.base_ev)}</Td>
                     <Td right mono className="text-slate-400">{pct(e.kelly * 0.25)}</Td>
-                    <Td right className="text-slate-500">{ago(e.quoted_at)}</Td><Td>{e.papered && <Pill tone="blue">papered</Pill>}</Td>
+                    <Td right className="text-slate-500">{ago(e.quoted_at)}</Td>
+                    <Td><span className="inline-flex items-center gap-1">{e.stale && <HoverTip tip={<span>Quoted before the consensus last moved: the book has not caught up, so the EV is the move, not an edge. Shown, never auto-papered.</span>}><Pill tone="amber">stale</Pill></HoverTip>}{e.papered && <Pill tone="blue">papered</Pill>}</span></Td>
                   </tr>
                 ))}
               </tbody>

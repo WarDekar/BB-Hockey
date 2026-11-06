@@ -9,7 +9,7 @@ from typing import Callable, Dict, List, Optional
 from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
-from . import odds_reader, pbp
+from . import odds_reader, pbp, schedule
 from .board import BOARD
 from .config import settings
 from .edges import evaluate_quotes, positive_edges
@@ -36,17 +36,23 @@ def _status(g: dict) -> str:
 
 def pricing_pass(odds: Engine, hockey: Engine, params: Optional[ModelParams] = None) -> dict:
     params = params or load_params(hockey)
-    games = odds_reader.slate(odds)
+    sched = schedule.index()   # NHL.com start times and live states: BB-Odds's schedule row can be hours off
+    games = []
+    for g in odds_reader.slate(odds):
+        home_t, away_t = resolve(g["home_name"]), resolve(g["away_name"])
+        games.append(schedule.overlay(g, sched, nhl_abbr(away_t.abbr if away_t else None), nhl_abbr(home_t.abbr if home_t else None)))
     with hockey.begin() as c:
         for g in games:
             upsert_game(c, g)
     ids = [g["id"] for g in games]
     cons = odds_reader.consensus(odds, ids)
+    moved_at = odds_reader.consensus_moved_at(odds, ids)
     quotes_by_game: Dict[int, List[dict]] = defaultdict(list)
     for q in odds_reader.book_quotes(odds, ids):
         quotes_by_game[int(q["game_id"])].append(q)
     priced, n_edges, placed, fresh = 0, 0, [], 0
     top: List[dict] = []
+    held: List[int] = []
     for g in games:
         g = dict(g); g["status"] = _status(g)
         if g["status"] != "pregame" or g["id"] not in cons:
@@ -57,24 +63,28 @@ def pricing_pass(odds: Engine, hockey: Engine, params: Optional[ModelParams] = N
         eng = pbp.eng_for_game(hockey, nhl_abbr(home_t.abbr if home_t else None), nhl_abbr(away_t.abbr if away_t else None), params)
         with hockey.begin() as c:
             r = price_game(c, g, cons[g["id"]], params, eng)
-            if r is None:
+            if r is None:   # no consensus, or held by the jump guard: no edges from an earlier market either
+                c.execute(text("DELETE FROM edges WHERE game_id = :g"), {"g": g["id"]})
+                held.append(g["id"])
                 continue
             sid, model, inputs, is_fresh, base = r
             priced += 1; fresh += int(is_fresh)
-            rows = evaluate_quotes(model, quotes_by_game.get(g["id"], []), base)
+            rows = evaluate_quotes(model, quotes_by_game.get(g["id"], []), base, moved_at=moved_at.get(g["id"]))
             pos = positive_edges(rows, min_ev=settings.store_min_ev)   # the whole evaluated board, capped at max_edge
             c.execute(text("DELETE FROM edges WHERE game_id = :g"), {"g": g["id"]})
             if pos:
                 c.execute(text("""
                     INSERT INTO edges (snapshot_id, game_id, market, side, point, period_src, sportsbook_id, sportsbook,
-                                       book_group, price, quoted_at, fair_prob, push_prob, fair_price, ev, kelly, base_prob, base_ev, price_quoted, price_basis)
+                                       book_group, price, quoted_at, fair_prob, push_prob, fair_price, ev, kelly, base_prob, base_ev, price_quoted, price_basis, stale)
                     VALUES (:sid, :game_id, :market, :side, :point, :period_src, :sportsbook_id, :sportsbook,
-                            :book_group, :price, :quoted_at, :fair_prob, :push_prob, :fair_price, :ev, :kelly, :base_prob, :base_ev, :price_quoted, :price_basis)
+                            :book_group, :price, :quoted_at, :fair_prob, :push_prob, :fair_price, :ev, :kelly, :base_prob, :base_ev, :price_quoted, :price_basis, :stale)
                 """), [dict(r, sid=sid) for r in pos])
-            n_edges += sum(1 for r in pos if r["ev"] >= settings.min_edge)
-            top.extend(dict(r, home=g["home_name"], away=g["away_name"]) for r in pos[:3] if r["ev"] >= settings.min_edge)
+            n_edges += sum(1 for r in pos if r["ev"] >= settings.min_edge and not r["stale"])
+            top.extend(dict(r, home=g["home_name"], away=g["away_name"]) for r in pos[:3] if r["ev"] >= settings.min_edge and not r["stale"])
             placed.extend(auto_paper(c, g, rows, sid))
     note = f"{len(games)} games, {priced} priced ({fresh} new snapshots), {n_edges} edges ≥ {settings.min_edge:.0%}, {len(placed)} auto bets"
+    if held:
+        note += f", {len(held)} held (no consensus or jump guard): {held}"
     heartbeat(hockey, "pricing", True, note)
     logger.info("pricing pass: %s", note)
     try:

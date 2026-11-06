@@ -72,6 +72,43 @@ goalie-off gap inside the last ten minutes of regulation (inside 6:00, or at
 least 20 s long); the pull rules live in `derive_pulls`. NHL abbreviations
 (LAK, NJD, SJS, TBL, UTA) differ from the ESPN ones in `teams.py`.
 
+## Start times, in-play leakage and stale quotes (2026-11-05)
+
+VAN @ WPG was moved by the league to 16:00 PT; BB-Odds's `current.games` row
+kept 17:07 and `started = false`, so its consensus turned in-play (WPG −200 →
+−450, total 6.5 → 8.5 in two minutes) while the pricer still saw a pregame game,
+marked every stale pregame quote as a +10–18% edge and papered 20 bets (voided,
+`flag = 'in_play'`). Three guards now, all in the pricing pass:
+
+1. **NHL.com is the schedule truth** (`bb_hockey/schedule.py`): each pass overlays
+   `api-web.nhle.com/v1/schedule` start times (`startTimeUTC`, the nominal :00
+   rather than BB-Odds's :07) and live states (`LIVE / CRIT / OFF / FINAL`) on
+   the slate before `upsert_game`; a game past its start is `live` whatever the
+   flags say. BB-Odds's times stand when NHL.com is unreachable.
+2. **Jump guard** (`pricer.jumped`, `jump_guard_prob` 0.10 / `jump_guard_total`
+   1.5): inputs that move like an in-play market against a live snapshot of the
+   last three hours hold the game: no snapshot, edges deleted, nothing papered,
+   `held` in the heartbeat note.
+3. **Stale quotes** (`edges.stale`, migration 008; `odds_reader.consensus_moved_at`,
+   `stale_move_prob` 0.03): a quote older than the consensus's last material
+   move (ML implied probability by more than 3 points, or any total-point
+   change, from `main.odds` history) is shown on the board with a `stale` pill
+   and a Fresh / Stale chip, and `auto_excluded` from paper. Those EVs are the
+   move the book has not caught up with, not an edge.
+
+## Board transport (2026-11-05)
+
+`GET /board` is the one full fetch per browser session (every evaluated quote
++ the slate + `{boot, seq}`); after that the worker emits a `board` Socket.IO
+delta per pricing pass with only the rows that moved (`bb_hockey/board.py`:
+rows keyed by game | period_src | market | side | point | book | n, diffed on
+content minus the volatile columns). The client store (`web/src/lib/board.ts`)
+applies deltas in sequence, persists to IndexedDB (too big for localStorage,
+and async), paints from that copy on reload, and resyncs on a missed `seq`,
+a new `boot` (server restart) or a socket reconnect (`GET /board/version`).
+The 60-second refetch timer for the Board and Edges tabs is gone; `/slate` and
+`/edges` still serve the same rows for BB-Odds and scripts.
+
 ## Edges board (2026-10-20)
 
 `edges` holds **every** evaluated quote of the latest pass per game (EV

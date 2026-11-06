@@ -7,6 +7,8 @@ Totals rows carry the OVER on the home side.
 """
 from __future__ import annotations
 
+from datetime import datetime
+
 from typing import Dict, List, Optional
 
 from .config import settings
@@ -36,11 +38,16 @@ def _sides(market_type: str, q: dict):
     return [("home", None, q.get("home_price"), hq), ("away", None, q.get("away_price"), aq)]
 
 
-def evaluate_quotes(model: GameModel, quotes: List[dict], base: Optional[GameModel] = None) -> List[dict]:
+def evaluate_quotes(model: GameModel, quotes: List[dict], base: Optional[GameModel] = None,
+                    moved_at: Optional[datetime] = None) -> List[dict]:
     """One row per quoted side with fair prob/push, fair price, EV and Kelly; with ``base`` (the league-average
-    model from the same ML + total) also the baseline prob / EV so the bench adjustment is visible per quote."""
+    model from the same ML + total) also the baseline prob / EV so the bench adjustment is visible per quote.
+    ``moved_at`` (when the consensus last moved materially) marks older quotes ``stale``: the book has not
+    caught up, so the EV is the move, not an edge; they stay on the board and are never auto-papered."""
     out = []
     for q in quotes:
+        qt = q.get("timestamp")
+        stale = bool(moved_at and qt and qt < moved_at)
         mk = market_key(q["market_type"], q["period"])
         if mk is None:
             continue
@@ -70,6 +77,7 @@ def evaluate_quotes(model: GameModel, quotes: List[dict], base: Optional[GameMod
                 "fair_prob": round(p_win, 5), "push_prob": round(p_push, 5),
                 "fair_price": fair_price_no_push(p_win, p_push),
                 "ev": round(ev, 5), "kelly": round(kelly_fraction(p_win, p_push, price) or 0.0, 5),
+                "stale": stale,
             })
     return out
 

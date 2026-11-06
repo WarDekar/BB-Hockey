@@ -21,7 +21,10 @@ const load = (): Filters => { try { const f = { ...DEFAULT, ...JSON.parse(localS
 // Same definitions as paper.summary(), computed over whatever the bar leaves visible. Flagged bets (placed on a
 // quote that was never live, e.g. a donbest_live copy of a book) stay in the table but are outside every number.
 const SETTLED = new Set(["won", "lost", "push"]);
-const FLAG_TIP: Record<string, string> = { stale_feed: "Quote came from BB-Odds's lapsed donbest_live feed, a second copy of the book that sat hours stale; the price was probably never live. Outside the totals." };
+const FLAG_TIP: Record<string, string> = {
+  stale_feed: "Quote came from BB-Odds's lapsed donbest_live feed, a second copy of the book that sat hours stale; the price was probably never live. Outside the totals.",
+  in_play: "The game had already started (BB-Odds's schedule row was behind NHL.com's), so the consensus was in-play and the quote a leftover pregame line. Outside the totals.",
+};
 const avg = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null);
 function summarize(all: Bet[]) {
   const rows = all.filter((b) => !b.flag);

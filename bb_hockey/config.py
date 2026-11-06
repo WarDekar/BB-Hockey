@@ -46,6 +46,13 @@ class Settings(BaseSettings):
     auto_paper_exclude: tuple = ("Bet105:puck", "Bet105:p1_spread", "Bet105:p2_spread", "Bet105:p3_spread")
 
     devig_method: str = "shin"
+    # Hold a game (no snapshot, no edges, no paper) when the consensus moves like an in-play market against the last
+    # live snapshot of the last three hours: more than this many probability points on the ML, or this much on the total.
+    jump_guard_prob: float = 0.10
+    jump_guard_total: float = 1.5
+    # A book quote older than the consensus's last move of more than this (ML probability) or any total-point change
+    # is marked stale: shown on the board, never auto-papered (the book has not caught up, the "edge" is the move).
+    stale_move_prob: float = 0.03
 
     def dsn_sqlalchemy(self, dsn: str) -> str:
         return dsn.replace("postgresql://", "postgresql+psycopg://", 1)

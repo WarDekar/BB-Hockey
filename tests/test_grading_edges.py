@@ -94,3 +94,45 @@ def test_board_keys_split_duplicate_quotes():
     r = {"game_id": 1, "period_src": "game", "market": "puck", "side": "away", "point": 1.5, "sportsbook_id": 716}
     keys = [x["key"] for x in _with_keys([dict(r, price=212), dict(r, price=220)])]
     assert len(set(keys)) == 2 and keys[0].endswith("|0") and keys[1].endswith("|1")
+
+
+def test_jump_guard_holds_in_play_moves():
+    from datetime import datetime, timedelta, timezone
+    from bb_hockey.pricer import jumped
+    now = datetime(2026, 11, 6, 0, 15, tzinfo=timezone.utc)
+    prev = {"computed_at": now - timedelta(minutes=2), "inputs": {"p_home": 0.68, "total_point": 6.5}}
+    assert jumped(prev, {"p_home": 0.79, "total_point": 6.5}, now)            # −200 → −450
+    assert jumped(prev, {"p_home": 0.69, "total_point": 8.5}, now)            # 6.5 → 8.5
+    assert jumped(prev, {"p_home": 0.72, "total_point": 7.0}, now) is None    # goalie news
+    old = dict(prev, computed_at=now - timedelta(hours=5))
+    assert jumped(old, {"p_home": 0.79, "total_point": 8.5}, now) is None     # not the same market any more
+    assert jumped(None, {"p_home": 0.79, "total_point": 8.5}, now) is None
+
+
+def test_schedule_overlay_uses_nhl_start_and_state():
+    from datetime import datetime, timedelta, timezone
+    from bb_hockey.schedule import overlay
+    now = datetime(2026, 11, 6, 0, 20, tzinfo=timezone.utc)
+    bb = {"id": 1075, "game_time": datetime(2026, 11, 6, 1, 7, tzinfo=timezone.utc), "started": False, "completed": False}
+    idx = {("VAN", "WPG"): {"start": datetime(2026, 11, 6, 0, 0, tzinfo=timezone.utc), "state": "LIVE", "id": 2026020259}}
+    g = overlay(bb, idx, "VAN", "WPG", now)
+    assert g["started"] and g["game_time"] == idx[("VAN", "WPG")]["start"] and g["nhl_game_id"] == 2026020259
+    # no NHL row: BB-Odds's time stands, but a game past its start is started regardless
+    g2 = overlay(dict(bb, game_time=now - timedelta(minutes=1)), {}, "ANA", "EDM", now)
+    assert g2["started"]
+    g3 = overlay(dict(bb, game_time=now + timedelta(hours=1)), {}, "ANA", "EDM", now)
+    assert not g3["started"]
+
+
+def test_stale_quotes_are_flagged_and_not_papered():
+    from datetime import datetime, timedelta, timezone
+    from bb_hockey.paper import auto_excluded
+    moved = datetime(2026, 11, 6, 0, 14, tzinfo=timezone.utc)
+    q = {"game_id": 1, "market_type": "spreads", "period": "game", "sportsbook_id": 713, "book": "BetOnline",
+         "home_price": -105, "away_price": -115, "home_point": -1.5, "away_point": 1.5, "timestamp": moved - timedelta(minutes=7)}
+    from bb_hockey.model.goals import GameModel, ModelParams
+    m = GameModel(3.4, 2.4, ModelParams())
+    rows = evaluate_quotes(m, [q], moved_at=moved)
+    assert rows and all(r["stale"] for r in rows) and all(auto_excluded(r) for r in rows)
+    fresh = evaluate_quotes(m, [dict(q, timestamp=moved + timedelta(seconds=30))], moved_at=moved)
+    assert not any(r["stale"] for r in fresh)

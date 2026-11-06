@@ -220,13 +220,41 @@ def write_snapshot(c: Connection, game_id: int, kind: str, inputs: dict, params:
     return int(row[0])
 
 
+JUMP_WINDOW = timedelta(hours=3)
+
+
+def jumped(prev: Optional[dict], inputs: dict, now: Optional[datetime] = None) -> Optional[str]:
+    """Why the new inputs look like an in-play market against the last live snapshot (None when they do not).
+    An NHL pregame market does not move ten points on the ML or a goal and a half on the total inside three
+    hours; a game that has started does (VAN @ WPG 2026-11-05: −200 → −450 and 6.5 → 8.5 in two minutes while
+    BB-Odds still said pregame)."""
+    if not prev or not prev.get("inputs"):
+        return None
+    now = now or datetime.now(timezone.utc)
+    if now - prev["computed_at"] > JUMP_WINDOW:
+        return None
+    pi = prev["inputs"]
+    dp = abs(float(inputs["p_home"]) - float(pi.get("p_home", inputs["p_home"])))
+    dt = abs(float(inputs["total_point"]) - float(pi.get("total_point", inputs["total_point"])))
+    if dp > settings.jump_guard_prob:
+        return f"ML moved {dp * 100:.0f} points against the {prev['computed_at']:%H:%M} snapshot"
+    if dt >= settings.jump_guard_total:
+        return f"total moved {dt:.1f} against the {prev['computed_at']:%H:%M} snapshot"
+    return None
+
+
 def price_game(c: Connection, game: dict, cons: Dict[tuple, dict], params: ModelParams, eng: Optional[dict] = None) -> Optional[Tuple[int, GameModel, dict, bool, Optional[GameModel]]]:
-    """Fit and (maybe) snapshot one game. Returns (snapshot_id, model, inputs, fresh)."""
+    """Fit and (maybe) snapshot one game. Returns (snapshot_id, model, inputs, fresh); None when there is no
+    consensus or the inputs jumped like an in-play market (``jumped``), in which case nothing is written."""
     inputs = build_inputs(cons, params, eng=eng)
     if inputs is None:
         return None
     prev = latest_snapshot(c, game["id"], kind="live")
     now = datetime.now(timezone.utc)
+    why = jumped(prev, inputs, now)
+    if why:
+        logger.warning("game %s held: %s", game["id"], why)
+        return None
     if prev and not _inputs_moved(prev, inputs) and prev["params"] == params.to_dict() \
             and now - prev["computed_at"] < SNAPSHOT_MIN_GAP and (prev.get("summary") or {}).get("baseline"):
         return int(prev["id"]), model_from_snapshot(prev), prev["inputs"], False, baseline_from_snapshot(prev)

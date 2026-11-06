@@ -86,6 +86,56 @@ def consensus(engine: Engine, game_ids: Iterable[int], book_id: int = 413) -> Di
     return out
 
 
+def consensus_moved_at(engine: Engine, game_ids: Iterable[int], book_id: int = 413, hours: int = 12,
+                       prob_tol: Optional[float] = None) -> Dict[int, Optional[datetime]]:
+    """{game_id: when the consensus ML or total last moved materially} from ``main.odds`` history (None: it has
+    not, inside ``hours``). The ML counts when its implied home probability differs from now by more than
+    ``prob_tol``; the total when its point differs. A book quote older than this predates the move."""
+    ids = _ids(game_ids)
+    if not ids:
+        return {}
+    prob_tol = settings.stale_move_prob if prob_tol is None else prob_tol
+    with engine.connect() as c:
+        rows = c.execute(text("""
+            SELECT m.game_id, m.market_type, o.home_price, o.away_price, o.home_point, o.timestamp
+            FROM main.odds o JOIN main.markets m ON m.id = o.market_id
+            WHERE m.game_id = ANY(:ids) AND o.sportsbook_id = :book AND m.period = 'game'
+              AND m.market_type IN ('h2h','totals') AND o.timestamp >= :since
+            ORDER BY m.game_id, m.market_type, o.timestamp DESC
+        """), {"ids": ids, "book": book_id, "since": datetime.now(timezone.utc) - timedelta(hours=hours)}).mappings().all()
+    by: Dict[tuple, list] = {}
+    for r in rows:
+        by.setdefault((int(r["game_id"]), r["market_type"]), []).append(r)
+    out: Dict[int, Optional[datetime]] = {g: None for g in ids}
+    for (gid, mt), hist in by.items():   # newest first
+        head = hist[0]
+
+        def differs(r) -> bool:
+            if mt == "h2h":
+                return abs(_implied_home(r) - _implied_home(head)) > prob_tol
+            return r["home_point"] != head["home_point"]
+
+        level_start = None   # the oldest row still at the current level, once an older row differs
+        for r in hist[1:]:
+            if differs(r):
+                level_start = level_start or head["timestamp"]
+                break
+            level_start = r["timestamp"]
+        else:
+            continue   # nothing older differs inside the window: no move
+        if out[gid] is None or level_start > out[gid]:
+            out[gid] = level_start
+    return out
+
+
+def _implied_home(r) -> float:
+    def p(a):
+        a = float(a)
+        return 100.0 / (a + 100.0) if a > 0 else -a / (-a + 100.0)
+    h, a = p(r["home_price"]), p(r["away_price"])
+    return h / (h + a) if h + a else 0.5
+
+
 def book_quotes(engine: Engine, game_ids: Iterable[int], max_age_min: Optional[int] = None) -> List[dict]:
     """Every live, non-synthetic book quote on the pregame markets we can price.
 

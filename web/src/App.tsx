@@ -12,7 +12,7 @@ import { useApi, useHash } from "./hooks";
 import { useBoard } from "./lib/board";
 import { useTeams } from "./lib/teams";
 import { HoverTip } from "./components/HoverTip";
-import type { Bet, BetSummary, Calibration as Calib, Edge, GameDetail as Detail, Health, Params as P, ResultRow, SlateRow } from "./lib/api";
+import type { Bet, BetSummary, Calibration as Calib, GameDetail as Detail, Health, Params as P, ResultRow } from "./lib/api";
 import { ago, money } from "./lib/format";
 
 const TABS = ["board", "edges", "bets", "results", "pulls", "calibration", "params"] as const;

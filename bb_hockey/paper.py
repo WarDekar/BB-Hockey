@@ -17,6 +17,8 @@ AUTO_EXCLUDED_MARKETS = {"ml"}  # the ML is the model's input; a book off the co
 
 def auto_excluded(row: dict) -> bool:
     """True when ``settings.auto_paper_exclude`` names this book for this market (``Book:market`` or ``Book:*``)."""
+    if row.get("stale"):
+        return True
     book = row.get("sportsbook")
     return f"{book}:{row.get('market')}" in settings.auto_paper_exclude or f"{book}:*" in settings.auto_paper_exclude
 
