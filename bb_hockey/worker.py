@@ -45,6 +45,9 @@ def pricing_pass(odds: Engine, hockey: Engine, params: Optional[ModelParams] = N
         for g in games:
             upsert_game(c, g)
     ids = [g["id"] for g in games]
+    with hockey.begin() as c:   # games off the slate (finals) are never revisited below, so their edges would linger forever
+        c.execute(text("DELETE FROM edges WHERE game_id IN (SELECT id FROM games WHERE game_time < now() - interval '6 hours' "
+                       "AND NOT (id = ANY(:ids)))"), {"ids": ids})
     cons = odds_reader.consensus(odds, ids)
     moved_at = odds_reader.consensus_moved_at(odds, ids)
     quotes_by_game: Dict[int, List[dict]] = defaultdict(list)
